@@ -272,6 +272,75 @@ class BECLoss(LossDefinition):
         return loss * 9.0
 
 
+class DielectricLoss(LossDefinition):
+    """
+    Loss for Macroscopic Static Dielectric Tensor
+    """
+
+    def __init__(
+        self,
+        name: str = 'DielectricTensor',
+        unit: str = '',
+        criterion: Optional[Callable] = None,
+        ref_key: str = KEY.DIELECTRIC_TENSOR,
+        pred_key: str = KEY.PRED_DIELECTRIC_TENSOR,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            name=name,
+            unit=unit,
+            criterion=criterion,
+            ref_key=ref_key,
+            pred_key=pred_key,
+            **kwargs,
+        )
+
+    def _get_cartesian_tensor(self) -> Any:
+        if getattr(self, '_ct', None) is None:
+            import e3nn.io
+            from e3nn.io import CartesianTensor
+            self._ct = CartesianTensor('ij=ji')
+            self._rtp = self._ct.reduced_tensor_products()
+        return self._ct, self._rtp
+
+    def _preprocess(
+        self, batch_data: Dict[str, Any], model: Optional[Callable] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        assert isinstance(self.pred_key, str) and isinstance(self.ref_key, str)
+
+        pred = batch_data[self.pred_key]
+
+        ref_cartesian = batch_data[self.ref_key]
+        if ref_cartesian.shape[-1] == 9 and ref_cartesian.dim() == 2:
+            ref_cartesian = ref_cartesian.reshape(-1, 3, 3)
+
+        ct, rtp = self._get_cartesian_tensor()
+        ref_irreps = ct.from_cartesian(ref_cartesian, rtp.to(ref_cartesian.device))
+
+        pred = torch.reshape(pred, (-1,))
+        ref = torch.reshape(ref_irreps, (-1,))
+        w_tensor = None
+
+        if self.use_weight:
+            loss_type = self.name.lower()
+            weight = batch_data[KEY.DATA_WEIGHT][loss_type]
+            w_tensor = weight[batch_data[KEY.BATCH]]
+            # Dielectric Tensor is a per-graph property,
+            # batch should be unique for it,
+            # but wait, since it's 6 components we need to repeat.
+            w_tensor = torch.repeat_interleave(w_tensor, 6)
+
+        return pred, ref, w_tensor
+
+    def get_loss(self, batch_data: Dict[str, Any], model: Optional[Callable] = None):
+        """
+        Function that return scalar.
+        Multiply by 6 to compensate for 6-component flattening.
+        """
+        loss = super().get_loss(batch_data, model)
+        return loss * 6.0
+
+
 def get_loss_functions_from_config(
     config: Dict[str, Any],
 ) -> List[Tuple[LossDefinition, float]]:
@@ -297,6 +366,9 @@ def get_loss_functions_from_config(
         loss_functions.append((StressLoss(**commons), config[KEY.STRESS_WEIGHT]))
     if config.get(KEY.IS_TRAIN_BEC, False):
         loss_functions.append((BECLoss(**commons), config[KEY.BEC_WEIGHT]))
+    if config.get(KEY.IS_TRAIN_DIELECTRIC, False):
+        loss_functions.append(
+            (DielectricLoss(**commons), config[KEY.DIELECTRIC_WEIGHT]))
 
     for loss_function, _ in loss_functions:  # why do these?
         if loss_function.criterion is None:

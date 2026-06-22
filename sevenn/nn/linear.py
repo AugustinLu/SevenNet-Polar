@@ -126,17 +126,36 @@ class AtomReduce(nn.Module):
 
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
         if self._is_batch_data:
+            # Squeeze dim=1 if it is size 1 to prevent (B, 1) output when (B,) is expected
+            # (which was the original behavior before we modified it).
             src = data[self.key_input].squeeze(1)
             size = int(data[KEY.BATCH].max()) + 1
+
+            # src can be (N, F) or (N,). We need output to match (B, F) or (B,).
+            out_shape = (size,) + src.shape[1:]
+
             output = torch.zeros(
-                (size),
+                out_shape,
                 dtype=src.dtype,
                 device=src.device,
             )
-            output.scatter_reduce_(0, data[KEY.BATCH], src, reduce='sum')
+
+            batch_idx = data[KEY.BATCH]
+            # Match the dimensions of the index tensor to the src tensor for scatter_reduce
+            if src.dim() > 1:
+                batch_idx = batch_idx.view(-1, 1).expand(-1, src.shape[1])
+
+            output.scatter_reduce_(0, batch_idx, src, reduce=self.reduce)
             data[self.key_output] = output * self.constant
         else:
-            data[self.key_output] = torch.sum(data[self.key_input]) * self.constant
+            if self.reduce == 'mean':
+                reduced = torch.mean(data[self.key_input], dim=0)
+            else:
+                reduced = torch.sum(data[self.key_input], dim=0)
+            # Match the squeeze behavior for unbatched single output
+            if reduced.dim() == 1 and reduced.shape[0] == 1:
+                reduced = reduced.squeeze(0)
+            data[self.key_output] = reduced * self.constant
 
         return data
 

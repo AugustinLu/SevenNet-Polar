@@ -208,7 +208,8 @@ def test_graph_build():
         for k in g1.keys():
             if not isinstance(g1[k], torch.Tensor):
                 continue
-            if k in ['stress', 'born_effective_charges']:  # TODO: robust test
+            # TODO: robust test
+            if k in ['stress', 'born_effective_charges', 'dielectric_tensor']:
                 assert torch.allclose(g1[k], g2[k], equal_nan=True) or (
                     torch.isnan(g1[k]).all() == torch.isnan(g2[k]).all()
                 )

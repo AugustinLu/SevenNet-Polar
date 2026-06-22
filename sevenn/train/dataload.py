@@ -213,6 +213,23 @@ def atoms_to_graph(
         KEY.BORN_EFFECTIVE_CHARGES: y_bec,
     }
 
+    y_dielectric = atoms.info.get('dielectric_tensor')
+    if y_dielectric is not None:
+        y_dielectric = np.array(y_dielectric)
+        if y_dielectric.shape == (9,):
+            y_dielectric = y_dielectric.reshape((3, 3))
+        if y_dielectric.shape == (1, 3, 3):
+            pass  # ok
+        elif y_dielectric.shape == (3, 3):
+            y_dielectric = y_dielectric.reshape((1, 3, 3))
+        else:
+            raise ValueError(
+                f'Invalid dielectric tensor shape: {y_dielectric.shape}')
+
+        # `data` dict at this point contains numpy arrays,
+        # which are converted to torch.Tensor later
+        data[KEY.DIELECTRIC_TENSOR] = y_dielectric
+
     if with_shift:
         data[KEY.CELL_SHIFT] = shift
         data[KEY.CELL] = cell
@@ -282,6 +299,7 @@ def _y_from_calc(atoms: ase.Atoms):
         'force': np.full((len(atoms), 3), np.nan),
         'stress': np.full((6,), np.nan),
         'born_effective_charges': np.full((len(atoms), 3, 3), np.nan),
+        'dielectric_tensor': np.full((1, 3, 3), np.nan),
     }
 
     if atoms.calc is None:
@@ -310,6 +328,15 @@ def _y_from_calc(atoms: ase.Atoms):
     except AttributeError:
         pass
 
+    try:
+        y_dielectric = atoms.calc.results.get(
+            'dielectric_tensor', np.full((1, 3, 3), np.nan))
+        if y_dielectric.shape == (3, 3):
+            y_dielectric = y_dielectric.reshape(1, 3, 3)
+        ret['dielectric_tensor'] = y_dielectric
+    except AttributeError:
+        pass
+
     return ret
 
 
@@ -319,11 +346,13 @@ def _set_atoms_y(
     force_key: Optional[str] = None,
     stress_key: Optional[str] = None,
     bec_key: Optional[str] = None,
+    dielectric_key: Optional[str] = None,
 ) -> List[ase.Atoms]:
     """
     Define how SevenNet reads ASE.atoms object for its y label
-    If energy_key, force_key, stress_key, or bec_key is given, the corresponding
-    label is obtained from .info or .arrays dict of Atoms object. These values should
+    If energy_key, force_key, stress_key, bec_key, or dielectric_key is given,
+    the corresponding label is obtained from .info or .arrays dict of Atoms
+    object. These values should
     have eV, eV/Angstrom, and eV/Angstrom^3 for energy, force, and stress,
     respectively. (stress in Voigt notation)
 
@@ -332,7 +361,10 @@ def _set_atoms_y(
         energy_key (str, optional): key to get energy. Defaults to None.
         force_key (str, optional): key to get force. Defaults to None.
         stress_key (str, optional): key to get stress. Defaults to None.
-        bec_key (str, optional): key to get born effective charges. Defaults to None.
+        bec_key (str, optional): key to get born effective charges. Defaults to
+            None.
+        dielectric_key (str, optional): key to get dielectric tensor. Defaults
+            to None.
 
     Returns:
         list[ase.Atoms]: list of ase.Atoms
@@ -370,6 +402,11 @@ def _set_atoms_y(
         else:
             atoms.arrays['y_bec'] = from_calc['born_effective_charges']
 
+        if dielectric_key is not None:
+            atoms.info['dielectric_tensor'] = atoms.info.pop(dielectric_key)
+        elif 'dielectric_tensor' not in atoms.info:
+            atoms.info['dielectric_tensor'] = from_calc['dielectric_tensor']
+
     return atoms_list
 
 
@@ -379,6 +416,7 @@ def ase_reader(
     force_key: Optional[str] = None,
     stress_key: Optional[str] = None,
     bec_key: Optional[str] = None,
+    dielectric_key: Optional[str] = None,
     index: str = ':',
     **kwargs,
 ) -> List[ase.Atoms]:
@@ -389,7 +427,9 @@ def ase_reader(
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
 
-    return _set_atoms_y(atoms_list, energy_key, force_key, stress_key, bec_key)
+    return _set_atoms_y(
+        atoms_list, energy_key, force_key, stress_key, bec_key, dielectric_key
+    )
 
 
 # Reader

@@ -71,6 +71,7 @@ def _run_stat(
         KEY.FORCE,
         KEY.STRESS,
         KEY.BORN_EFFECTIVE_CHARGES,
+        KEY.DIELECTRIC_TENSOR,
     ]
     n_neigh = []
     natoms_counter = Counter()

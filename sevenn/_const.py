@@ -33,6 +33,7 @@ SUPPORTING_ERROR_TYPES = [
     'Stress',
     'Stress_GPa',
     'BornEffectiveCharges',
+    'DielectricTensor',
     'TotalLoss',
 ]
 
@@ -268,6 +269,7 @@ DEFAULT_TRAINING_CONFIG = {
     KEY.FORCE_WEIGHT: 0.1,
     KEY.STRESS_WEIGHT: 1e-6,  # SIMPLE-NN default
     KEY.BEC_WEIGHT: 1.0,
+    KEY.DIELECTRIC_WEIGHT: 1.0,
     KEY.PER_EPOCH: 5,
     # KEY.USE_TESTSET: False,
     KEY.CONTINUE: {
@@ -283,6 +285,7 @@ DEFAULT_TRAINING_CONFIG = {
     KEY.NUM_WORKERS: 0,
     KEY.IS_TRAIN_STRESS: True,
     KEY.IS_TRAIN_BEC: False,
+    KEY.IS_TRAIN_DIELECTRIC: False,
     KEY.TRAIN_SHUFFLE: True,
     KEY.ERROR_RECORD: [
         ['Energy', 'RMSE'],
@@ -303,6 +306,7 @@ TRAINING_CONFIG_CONDITION = {
     KEY.FORCE_WEIGHT: float,
     KEY.STRESS_WEIGHT: float,
     KEY.BEC_WEIGHT: float,
+    KEY.DIELECTRIC_WEIGHT: float,
     KEY.USE_TESTSET: None,  # Not used
     KEY.NUM_WORKERS: int,
     KEY.PER_EPOCH: int,
@@ -317,6 +321,7 @@ TRAINING_CONFIG_CONDITION = {
     KEY.DEFAULT_MODAL: str,
     KEY.IS_TRAIN_STRESS: bool,
     KEY.IS_TRAIN_BEC: bool,
+    KEY.IS_TRAIN_DIELECTRIC: bool,
     KEY.TRAIN_SHUFFLE: bool,
     KEY.ERROR_RECORD: error_record_condition,
     KEY.BEST_METRIC: str,
@@ -359,5 +364,23 @@ def train_defaults(config):
             config[KEY.ERROR_RECORD] = new_err
     else:
         defaults.pop(KEY.BEC_WEIGHT, None)
+
+    if KEY.IS_TRAIN_DIELECTRIC not in config:
+        config[KEY.IS_TRAIN_DIELECTRIC] = defaults[KEY.IS_TRAIN_DIELECTRIC]
+
+    if config[KEY.IS_TRAIN_DIELECTRIC]:
+        current_err = config.get(KEY.ERROR_RECORD, defaults[KEY.ERROR_RECORD])
+        if type(current_err) is list:
+            new_err = [list(e) for e in current_err]
+            if not any(e[0] == 'DielectricTensor' for e in new_err):
+                total_loss_idx = len(new_err)
+                for i, e in enumerate(new_err):
+                    if e[0] == 'TotalLoss':
+                        total_loss_idx = i
+                        break
+                new_err.insert(total_loss_idx, ['DielectricTensor', 'RMSE'])
+            config[KEY.ERROR_RECORD] = new_err
+    else:
+        defaults.pop(KEY.DIELECTRIC_WEIGHT, None)
 
     return defaults

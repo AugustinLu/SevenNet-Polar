@@ -620,6 +620,24 @@ def build_E3_equivariant_model(
             }
         )
 
+    if config.get(KEY.IS_TRAIN_DIELECTRIC, False):
+        layers.update(
+            {
+                'reduce_dielectric': AtomReduce(
+                    data_key_in=KEY.NODE_FEATURE,
+                    data_key_out='_reduced_feature_dielectric',
+                    reduce='mean',
+                ),
+                'predict_dielectric': IrrepsLinear(
+                    irreps_x,
+                    Irreps('1x0e+1x2e'),
+                    data_key_in='_reduced_feature_dielectric',
+                    data_key_out=KEY.PRED_DIELECTRIC_TENSOR,
+                    biases=config[KEY.USE_BIAS_IN_LINEAR],
+                )
+            }
+        )
+
     layers.update(init_feature_reduce(config, irreps_x))  # type: ignore
 
     layers.update(

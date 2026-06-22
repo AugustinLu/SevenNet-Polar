@@ -184,6 +184,7 @@ class SevenNetCalculator(Calculator):
             'stress',
             'energies',
             'born_effective_charges',
+            'dielectric_tensor',
         ]
 
     def set_atoms(self, atoms: Atoms) -> None:
@@ -233,6 +234,23 @@ class SevenNetCalculator(Calculator):
             )
 
             res['born_effective_charges'] = pred_bec_cartesian.numpy()[:num_atoms]
+
+        if KEY.PRED_DIELECTRIC_TENSOR in output:
+            if getattr(self, '_ct_dielec', None) is None:
+                import e3nn.io
+
+                self._ct_dielec = e3nn.io.CartesianTensor('ij=ji')
+                self._rtp_dielec = self._ct_dielec.reduced_tensor_products()
+
+            ct_dielec = self._ct_dielec
+            rtp_dielec = self._rtp_dielec
+            pred_dielectric_irreps = output[KEY.PRED_DIELECTRIC_TENSOR].detach(
+            ).cpu()
+
+            pred_dielectric_cartesian = ct_dielec.to_cartesian(
+                pred_dielectric_irreps, rtp_dielec.to(pred_dielectric_irreps.device)
+            )
+            res['dielectric_tensor'] = pred_dielectric_cartesian.numpy()
 
         return res
 
