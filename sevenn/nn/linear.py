@@ -126,8 +126,8 @@ class AtomReduce(nn.Module):
 
     def forward(self, data: AtomGraphDataType) -> AtomGraphDataType:
         if self._is_batch_data:
-            # Squeeze dim=1 if it is size 1 to prevent (B, 1) output when (B,) is expected
-            # (which was the original behavior before we modified it).
+            # Squeeze dim=1 if it is size 1 to prevent (B, 1) output
+            # when (B,) is expected (original behavior before we modified it).
             src = data[self.key_input].squeeze(1)
             size = int(data[KEY.BATCH].max()) + 1
 
@@ -141,7 +141,8 @@ class AtomReduce(nn.Module):
             )
 
             batch_idx = data[KEY.BATCH]
-            # Match the dimensions of the index tensor to the src tensor for scatter_reduce
+            # Match the dimensions of the index tensor to the src tensor
+            # for scatter_reduce
             if src.dim() > 1:
                 batch_idx = batch_idx.view(-1, 1).expand(-1, src.shape[1])
 
