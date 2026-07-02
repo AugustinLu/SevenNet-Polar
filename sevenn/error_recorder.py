@@ -176,7 +176,9 @@ class ErrorMetric:
         # If BornEffectiveCharges or Dielectric, convert irreps (pred) to cartesian
         if self.is_bec or self.is_dielectric:
             ct, rtp = self._get_cartesian_tensor()
-            if y_pred.shape[-1] == 9 or (self.is_dielectric and y_pred.shape[-1] == 6):
+            if y_pred.shape[-1] == 9 or (
+                self.is_dielectric and y_pred.shape[-1] == 6
+            ):
                 y_pred = ct.to_cartesian(y_pred, rtp.to(y_pred.device))
                 y_pred = y_pred.view(-1, 9)
             if y_ref.shape[-1] == 3 and y_ref.dim() >= 3:
