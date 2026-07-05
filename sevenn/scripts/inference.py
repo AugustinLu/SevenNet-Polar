@@ -16,8 +16,10 @@ from sevenn.train.modal_dataset import SevenNetMultiModalDataset
 def write_inference_csv(output_list, out):
     for i, output in enumerate(output_list):
         output = output.fit_dimension()
-        output[KEY.STRESS] = output[KEY.STRESS] * 1602.1766208
-        output[KEY.PRED_STRESS] = output[KEY.PRED_STRESS] * 1602.1766208
+        if KEY.STRESS in output:
+            output[KEY.STRESS] = output[KEY.STRESS] * 1602.1766208
+        if KEY.PRED_STRESS in output:
+            output[KEY.PRED_STRESS] = output[KEY.PRED_STRESS] * 1602.1766208
         output_list[i] = output.to_numpy_dict()
 
     per_graph_keys = [
@@ -27,6 +29,8 @@ def write_inference_csv(output_list, out):
         KEY.PRED_TOTAL_ENERGY,
         KEY.STRESS,
         KEY.PRED_STRESS,
+        KEY.DIELECTRIC_TENSOR,
+        KEY.PRED_DIELECTRIC_TENSOR,
     ]
 
     per_atom_keys = [
@@ -35,18 +39,24 @@ def write_inference_csv(output_list, out):
         KEY.POS,
         KEY.FORCE,
         KEY.PRED_FORCE,
+        KEY.BORN_EFFECTIVE_CHARGES,
+        KEY.PRED_BORN_EFFECTIVE_CHARGES,
     ]
 
-    def unfold_dct_val(dct, keys, suffix_list=None):
+    def unfold_dct_val(dct, keys, suffix_list=None, sfx_dict=None):
         res = {}
         if suffix_list is None:
             suffix_list = range(100)
+        if sfx_dict is None:
+            sfx_dict = {}
+
         for k in keys:
             if k not in dct:
                 res[k] = '-'
             elif isinstance(dct[k], np.ndarray) and dct[k].ndim != 0:
+                sfx = sfx_dict.get(k, suffix_list)
                 res.update(
-                    {f'{k}_{suffix_list[i]}': v for i, v in enumerate(dct[k])}
+                    {f'{k}_{sfx[i]}': v for i, v in enumerate(dct[k].flatten())}
                 )
             else:
                 res[k] = dct[k]
@@ -54,13 +64,23 @@ def write_inference_csv(output_list, out):
 
     def per_atom_dct_list(dct, keys):
         sfx_list = ['x', 'y', 'z']
+        sfx_dict = {
+            KEY.BORN_EFFECTIVE_CHARGES: [
+                'xx', 'xy', 'xz', 'yx', 'yy', 'yz', 'zx', 'zy', 'zz'
+            ],
+            KEY.PRED_BORN_EFFECTIVE_CHARGES: [
+                'xx', 'xy', 'xz', 'yx', 'yy', 'yz', 'zx', 'zy', 'zz'
+            ],
+        }
         res = []
         natoms = dct[KEY.NUM_ATOMS]
-        extracted = {k: dct[k] for k in keys}
+        extracted = {k: dct[k] for k in keys if k in dct}
         for i in range(natoms):
             raw = {}
             raw.update({k: v[i] for k, v in extracted.items()})
-            per_atom_dct = unfold_dct_val(raw, keys, suffix_list=sfx_list)
+            per_atom_dct = unfold_dct_val(
+                raw, keys, suffix_list=sfx_list, sfx_dict=sfx_dict
+            )
             res.append(per_atom_dct)
         return res
 
@@ -76,10 +96,20 @@ def write_inference_csv(output_list, out):
         print('failed to write meta data, info.csv is not written')
 
     with open(f'{out}/per_graph.csv', 'w', newline='') as f:
-        sfx_list = ['xx', 'yy', 'zz', 'xy', 'yz', 'zx']  # for stress
+        sfx_list = ['xx', 'yy', 'zz', 'xy', 'yz', 'zx']  # default for stress
+        sfx_dict = {
+            KEY.DIELECTRIC_TENSOR: [
+                'xx', 'xy', 'xz', 'yx', 'yy', 'yz', 'zx', 'zy', 'zz'
+            ],
+            KEY.PRED_DIELECTRIC_TENSOR: [
+                'xx', 'xy', 'xz', 'yx', 'yy', 'yz', 'zx', 'zy', 'zz'
+            ],
+        }
         writer = None
         for output in output_list:
-            data = unfold_dct_val(output, per_graph_keys, sfx_list)
+            data = unfold_dct_val(
+                output, per_graph_keys, suffix_list=sfx_list, sfx_dict=sfx_dict
+            )
 
             if writer is None:
                 writer = csv.DictWriter(f, fieldnames=data.keys())
