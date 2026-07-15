@@ -15,43 +15,6 @@ For general information on the base SevenNet package, please refer to the [Seven
  - Multi-fidelity training for combining multiple databases with different calculation settings
  - [Tensor product accelerators](https://sevennet.readthedocs.io/en/latest/user_guide/accelerator.html)
 
-## Architecture Pipeline
-
-Below is a high-level overview of how SevenNet calculates physical properties (Energy, Forces, Stress, and Born Effective Charges) from atomic coordinates:
-
-```mermaid
-flowchart TD
-    A[Atomic Coordinates & Cell] --> B[Graph Construction]
-    B --> C[Edge Spherical Harmonics]
-    B --> D[Initial Node Embeddings]
-
-    C --> E
-    D --> E
-
-    E[Equivariant Message Passing <br> Tensor Products in <br> Irreps  Space] --> F[Final Node Features <br> Mixed Irreps]
-
-    F -->|Filter L=0 scalars| G[Scalar Output Layer]
-    F -->|Filter L=0,1,2 Irreps| H[Tensor Output Layer <br> 1x0e + 1x1e + 1x2e]
-
-    G --> I[Atomic Energies]
-    I -->|Sum| J((Total Energy))
-
-    A -.->|PyTorch Autograd| J
-    J -.->|Gradient w.r.t Positions| K((Forces))
-    J -.->|Gradient w.r.t Strain| L((Stress))
-
-    H --> M[Change of Basis <br> e3nn CartesianTensor]
-    M --> N((BEC Tensor <br> 3x3 Cartesian))
-
-    classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px,color:#000;
-    classDef model fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
-    classDef output fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000;
-
-    class A,B,C,D input;
-    class E,F,G,H,M model;
-    class J,K,L,N output;
-```
-
 ## Installation and user guides
 
 Installation (including LAMMPS and D3) and user guides for the base package can be found in the [SevenNet documentation](https://sevennet.readthedocs.io/en/latest/).
