@@ -176,3 +176,9 @@ If you use the base SevenNet code, please cite:
 	pages = {4857--4868},
 }
 ```
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+SevenNet-Polar is a fork of the original SevenNet package, which is also licensed under the MIT License by Yutack Park. The original license is preserved in the [LICENSE.SevenNet](LICENSE.SevenNet) file.
