@@ -40,13 +40,11 @@ train:
 data:
   batch_size: 1
   data_divide_ratio: 0.1                        # Split dataset into training and validation sets by this ratio
-
   shift: 'per_atom_energy_mean'
   scale: 1.0
   data_format: 'ase'
   data_format_args:
     format: 'extxyz'
     index: '::'
-  data_divide_ratio: 0.1                        # Split dataset into training and validation sets by this ratio
   load_trainset_path: ['data.xyz']
 
