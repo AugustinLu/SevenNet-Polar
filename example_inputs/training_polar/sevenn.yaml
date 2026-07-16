@@ -44,4 +44,3 @@ data:
     format: 'extxyz'
     index: '::'
   load_trainset_path: ['data.xyz']
-  
