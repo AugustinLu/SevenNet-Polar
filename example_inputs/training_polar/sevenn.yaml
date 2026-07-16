@@ -12,14 +12,12 @@ train:
   random_seed: 1
   num_workers: 4
   epoch: 40
-
   is_train_stress: True
   is_train_bec: True
   energy_loss_weight: 1.0
   force_loss_weight: 0.3
   bec_loss_weight: 1.0
   stress_loss_weight: 1.0e-5
-  
   loss: 'mse'
   optimizer: 'adam'
   optim_param:
@@ -27,7 +25,6 @@ train:
   scheduler: 'exponentiallr'
   scheduler_param:
       gamma: 0.992
-
   per_epoch: 5
   error_record:
     - ['Energy', 'RMSE']
@@ -47,4 +44,3 @@ data:
     format: 'extxyz'
     index: '::'
   load_trainset_path: ['data.xyz']
-
