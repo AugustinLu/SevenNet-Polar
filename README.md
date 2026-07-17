@@ -155,11 +155,12 @@ pair_coeff     * * 4 deployed_parallel_model_dir efield 0.0 0.0 0.01 Zr O
 
 If you use SevenNet-Polar, please cite our upcoming paper:
 ```bib
-@article{lu_sevennet_polar_202X,
+@article{lu_sevennet_polar_2026,
 	title = {SevenNet-Polar for MultiTask Prediction of Energy, Forces, Stress, and Born Effective Charges: Development and Application to ZrO2, Li3PO4, and Perovskites},
 	journal = {arXiv preprint},
+	doi = {10.48550/arXiv.2607.14827},
 	author = {Lu, Anh Khoa Augustin and Arai, Shungo and Park, Yutack and Han, Seungwu and Miyazaki, Tsuyoshi and Watanabe, Satoshi},
-	year = {202X},
+	year = {2026},
 }
 ```
 
