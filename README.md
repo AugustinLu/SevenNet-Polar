@@ -153,7 +153,10 @@ pair_coeff     * * 4 deployed_parallel_model_dir efield 0.0 0.0 0.01 Zr O
 
 ## Citation
 
-If you use SevenNet-Polar, please cite our upcoming paper:
+
+
+If you use SevenNet-Polar, please cite our [preprint](https://arxiv.org/abs/2607.14827):
+
 ```bib
 @article{lu_sevennet_polar_2026,
 	title = {SevenNet-Polar for MultiTask Prediction of Energy, Forces, Stress, and Born Effective Charges: Development and Application to ZrO2, Li3PO4, and Perovskites},
@@ -164,7 +167,8 @@ If you use SevenNet-Polar, please cite our upcoming paper:
 }
 ```
 
-If you use the base SevenNet code, please cite:
+If you use the base SevenNet code, please cite the original [paper](https://pubs.acs.org/doi/full/10.1021/acs.jctc.4c00190):
+
 ```bib
 @article{park_scalable_2024,
 	title = {Scalable Parallel Algorithm for Graph Neural Network Interatomic Potentials in Molecular Dynamics Simulations},
