@@ -33,6 +33,8 @@
 
 #include <cuda_runtime.h>
 
+#include <mpi.h>
+
 #include "atom.h"
 #include "comm.h"
 #include "domain.h"
@@ -510,8 +512,23 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
         for (int k = 0; k < 9; k++) bec_mean[k] += bec_cart[graph_idx][k];
       }
     }
-    if (enforce_asr && nlocal > 0) {
-      for (int k = 0; k < 9; k++) bec_mean[k] /= nlocal;
+    if (enforce_asr) {
+      // bec_mean currently holds this rank's LOCAL sum over its own owned
+      // atoms only. The acoustic sum rule is a property of the whole
+      // physical system (Sum over ALL atoms of Z_i* = 0), not of whatever
+      // subset domain decomposition happened to assign to this rank -- a
+      // per-rank local mean would make the correction (and therefore the
+      // force and virial) depend on the MPI rank count and processor
+      // decomposition, which must not happen. Reduce to the true global
+      // sum, then divide by the global atom count (already available,
+      // computed once above from atom->natoms -- not another reduction).
+      std::array<double, 9> bec_sum_global = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+      MPI_Allreduce(bec_mean.data(), bec_sum_global.data(), 9, MPI_DOUBLE,
+                    MPI_SUM, world);
+      bec_mean = bec_sum_global;
+      if (natoms > 0) {
+        for (int k = 0; k < 9; k++) bec_mean[k] /= static_cast<double>(natoms);
+      }
     }
 
     for (int graph_idx = 0; graph_idx < nlocal; graph_idx++) {
