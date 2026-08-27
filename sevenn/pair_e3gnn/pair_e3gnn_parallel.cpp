@@ -18,12 +18,14 @@
 #include <ATen/core/Dict.h>
 #include <ATen/core/ivalue_inl.h>
 #include <ATen/ops/from_blob.h>
+#include <array>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
 #include <cstdlib>
 #include <filesystem>
 #include <numeric>
 #include <string>
+#include <vector>
 
 #include <torch/csrc/jit/api/module.h>
 #include <torch/script.h>
@@ -33,6 +35,7 @@
 
 #include "atom.h"
 #include "comm.h"
+#include "domain.h"
 #include "comm_brick.h"
 #include "error.h"
 #include "force.h"
@@ -200,6 +203,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
   double **x = atom->x;
   double **f = atom->f;
+  imageint *image = atom->image;
   int *type = atom->type;
   int nlocal = list->inum; // same as nlocal
   int nghost = atom->nghost;
@@ -315,13 +319,32 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   // r_original requires grad True
   inp_edge_vec.set_requires_grad(true);
 
+  float cell[3][3];
+  cell[0][0] = domain->boxhi[0] - domain->boxlo[0];
+  cell[0][1] = 0.0;
+  cell[0][2] = 0.0;
+
+  cell[1][0] = domain->xy;
+  cell[1][1] = domain->boxhi[1] - domain->boxlo[1];
+  cell[1][2] = 0.0;
+
+  cell[2][0] = domain->xz;
+  cell[2][1] = domain->yz;
+  cell[2][2] = domain->boxhi[2] - domain->boxlo[2];
+
+  torch::Tensor inp_cell = torch::from_blob(cell, {3, 3}, FLOAT_TYPE);
+  torch::Tensor inp_cell_volume =
+      torch::dot(inp_cell[0], torch::cross(inp_cell[1], inp_cell[2], 0));
+
   torch::Dict<std::string, torch::Tensor> input_dict;
   input_dict.insert("x", inp_node_type.to(device));
   input_dict.insert("x_ghost", inp_node_type_ghost.to(device));
   input_dict.insert("edge_index", inp_edge_index.to(device));
   input_dict.insert("edge_vec", inp_edge_vec.to(device));
+  input_dict.insert("pos", torch::zeros({ntotal, 3}).to(device));
   input_dict.insert("num_atoms", inp_num_atoms.to(device));
   input_dict.insert("nlocal", inp_num_atoms.to(torch::kCPU));
+  input_dict.insert("cell_volume", inp_cell_volume.to(device));
 
   std::list<std::vector<torch::Tensor>> wrt_tensors;
   wrt_tensors.push_back({input_dict.at("edge_vec")});
@@ -458,27 +481,51 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     constexpr double inv_sqrt6 = 0.40824829046386302; // 1.0 / sqrt(6.0)
     constexpr double sqrt2_3   = 0.81649658092772603; // sqrt(2.0 / 3.0)
 
+    // Reconstruct every atom's Cartesian BEC tensor first (needed either
+    // way), and, if enforce_asr, subtract the mean so that Sum_i Z_i* = 0
+    // exactly before it is used for both the force and the virial -- keeps
+    // them mutually consistent derivatives of the same (ASR-clean)
+    // quantity. Mirrors FieldCalculator.enforce_asr on the ASE side.
+    std::vector<std::array<double, 9>> bec_cart(nlocal);
+    std::array<double, 9> bec_mean = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     for (int graph_idx = 0; graph_idx < nlocal; graph_idx++) {
-      int i = graph_index_to_i[graph_idx];
-
-      // Extract from float tensor and immediately promote to double for all further math
       double i0 = bec[graph_idx][0];
       double i1 = bec[graph_idx][1], i2 = bec[graph_idx][2], i3 = bec[graph_idx][3];
       double i4 = bec[graph_idx][4], i5 = bec[graph_idx][5], i6 = bec[graph_idx][6];
       double i7 = bec[graph_idx][7], i8 = bec[graph_idx][8];
 
-      // Reconstruct Cartesian tensor directly in double precision
-      double c_xx =  inv_sqrt3 * i0 - inv_sqrt6 * i6 - inv_sqrt2 * i8;
-      double c_xy =  inv_sqrt2 * i3 + inv_sqrt2 * i5;
-      double c_xz = -inv_sqrt2 * i2 + inv_sqrt2 * i4;
+      // Order: xx, xy, xz, yx, yy, yz, zx, zy, zz
+      bec_cart[graph_idx] = {
+          inv_sqrt3 * i0 - inv_sqrt6 * i6 - inv_sqrt2 * i8,
+          inv_sqrt2 * i3 + inv_sqrt2 * i5,
+          -inv_sqrt2 * i2 + inv_sqrt2 * i4,
+          -inv_sqrt2 * i3 + inv_sqrt2 * i5,
+          inv_sqrt3 * i0 + sqrt2_3 * i6,
+          inv_sqrt2 * i1 + inv_sqrt2 * i7,
+          inv_sqrt2 * i2 + inv_sqrt2 * i4,
+          -inv_sqrt2 * i1 + inv_sqrt2 * i7,
+          inv_sqrt3 * i0 - inv_sqrt6 * i6 + inv_sqrt2 * i8,
+      };
+      if (enforce_asr) {
+        for (int k = 0; k < 9; k++) bec_mean[k] += bec_cart[graph_idx][k];
+      }
+    }
+    if (enforce_asr && nlocal > 0) {
+      for (int k = 0; k < 9; k++) bec_mean[k] /= nlocal;
+    }
 
-      double c_yx = -inv_sqrt2 * i3 + inv_sqrt2 * i5;
-      double c_yy =  inv_sqrt3 * i0 + sqrt2_3   * i6;
-      double c_yz =  inv_sqrt2 * i1 + inv_sqrt2 * i7;
+    for (int graph_idx = 0; graph_idx < nlocal; graph_idx++) {
+      int i = graph_index_to_i[graph_idx];
 
-      double c_zx =  inv_sqrt2 * i2 + inv_sqrt2 * i4;
-      double c_zy = -inv_sqrt2 * i1 + inv_sqrt2 * i7;
-      double c_zz =  inv_sqrt3 * i0 - inv_sqrt6 * i6 + inv_sqrt2 * i8;
+      double c_xx = bec_cart[graph_idx][0] - bec_mean[0];
+      double c_xy = bec_cart[graph_idx][1] - bec_mean[1];
+      double c_xz = bec_cart[graph_idx][2] - bec_mean[2];
+      double c_yx = bec_cart[graph_idx][3] - bec_mean[3];
+      double c_yy = bec_cart[graph_idx][4] - bec_mean[4];
+      double c_yz = bec_cart[graph_idx][5] - bec_mean[5];
+      double c_zx = bec_cart[graph_idx][6] - bec_mean[6];
+      double c_zy = bec_cart[graph_idx][7] - bec_mean[7];
+      double c_zz = bec_cart[graph_idx][8] - bec_mean[8];
 
       double fx = (c_xx * efield[0] + c_xy * efield[1] + c_xz * efield[2]) * force->qe2f;
       double fy = (c_yx * efield[0] + c_yy * efield[1] + c_yz * efield[2]) * force->qe2f;
@@ -498,6 +545,24 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       f[i][0] += fx;
       f[i][1] += fy;
       f[i][2] += fz;
+
+      // Finite-field virial contribution (one-body external-field force,
+      // not covered by the pairwise edge-vec (x) dE_dr virial below). Same
+      // convention as LAMMPS's own fix_efield.cpp for a uniform field
+      // acting on a per-atom force: virial_ab += F_a * r_b using
+      // *unwrapped* atomic coordinates. This is the clamped-ion strain
+      // derivative of the field enthalpy term -Omega*P.E; see enforce_asr
+      // for its translation-invariance caveat under ASR violation.
+      if (vflag) {
+        double unwrap[3];
+        domain->unmap(x[i], image[i], unwrap);
+        virial[0] += fx * unwrap[0];
+        virial[1] += fy * unwrap[1];
+        virial[2] += fz * unwrap[2];
+        virial[3] += fx * unwrap[1];
+        virial[4] += fx * unwrap[2];
+        virial[5] += fy * unwrap[2];
+      }
     }
   }
 
@@ -666,6 +731,11 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
     efield[1] = std::stod(arg[chem_arg_i + 2]);
     efield[2] = std::stod(arg[chem_arg_i + 3]);
     chem_arg_i += 4;
+
+    if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
+      enforce_asr = true;
+      chem_arg_i += 1;
+    }
   }
 
   bool found_flag = false;

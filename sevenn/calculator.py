@@ -283,6 +283,138 @@ class SevenNetCalculator(Calculator):
         self.results = self.output_to_results(self.model(data))
 
 
+class FieldCalculator(Calculator):
+    """Adds the finite-field force AND its matching virial/stress to a
+    base calculator's results, from a model's predicted Born effective
+    charge (BEC) tensor.
+
+    F_i = F_i^0 + Z_i* . E   (already the existing convention, e.g. in
+    the sevenn LAMMPS pair style's ``efield`` keyword)
+
+    The virial/stress contribution was, until this fix, silently
+    omitted everywhere this force has been applied (LAMMPS pair style,
+    and every ASE-based finite-field driver script surveyed for this
+    fix) -- meaning any barostat coupled to such a calculator was blind
+    to the field's contribution to the stress.
+
+    The virial term is the clamped-ion strain derivative of the field
+    enthalpy term -Omega*P.E, using the same Z_i* already used for the
+    force:
+
+        stress_field = -(1/V) * sum_i r_i (x) F_i^field
+
+    following the same one-body external-field convention LAMMPS's own
+    ``fix efield`` uses (virial += F * r, using *unwrapped* atomic
+    coordinates). ``atoms.get_positions()`` is used directly: ASE does
+    not wrap atomic coordinates back into the cell during MD unless
+    ``atoms.wrap()`` is called explicitly, so positions are ordinarily
+    already "unwrapped" in the required sense. If your workflow calls
+    ``atoms.wrap()`` mid-trajectory, be aware this term is only exactly
+    translation-invariant when the BEC tensors satisfy the acoustic sum
+    rule (sum_i Z_i* = 0) -- exact for models whose BEC output satisfies
+    it by construction, only approximate otherwise (see ``enforce_asr``
+    below).
+
+    Sign/ordering convention is derived directly from
+    ``SevenNetCalculator.output_to_results``, which reports
+    ``stress = -inferred_stress`` reordered to ASE's native Voigt order
+    (xx, yy, zz, yz, xz, xy) -- i.e. the same relationship
+    ``ASE stress = -(1/V) * LAMMPS virial`` is used here for the field
+    term, rather than assuming ASE's stress sign convention
+    independently.
+
+    Parameters
+    ----------
+    base_calculator: ase.calculators.calculator.Calculator
+        Must return ``born_effective_charges`` in its results (e.g.
+        ``SevenNetCalculator`` with a model trained with
+        ``is_train_bec: true``).
+    enforce_asr: bool, default=True
+        If True, project out the mean BEC (``Z* -= mean(Z*, axis=0)``)
+        before computing both the force and the virial, so they remain
+        exactly mutually consistent and the virial stays exactly
+        translation-invariant even for ``direct``-method models whose
+        raw BEC output violates the acoustic sum rule. If False, the
+        raw (possibly ASR-violating) BEC is used, matching the current
+        LAMMPS pair style's behavior.
+    """
+
+    implemented_properties = [
+        'free_energy', 'energy', 'energies', 'forces', 'stress',
+        'born_effective_charges', 'dielectric_tensor',
+    ]
+
+    def __init__(self, base_calculator, enforce_asr: bool = True, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.base_calculator = base_calculator
+        self.enforce_asr = enforce_asr
+        self.efield = np.zeros(3, dtype=float)
+        self.last_field_forces = None
+
+    def set_atoms(self, atoms: Atoms) -> None:
+        if hasattr(self.base_calculator, 'set_atoms'):
+            self.base_calculator.set_atoms(atoms)
+
+    def set_efield(self, efield) -> bool:
+        """Set the field (V/Angstrom). Returns True if this invalidated
+        the cached result."""
+        efield = np.asarray(efield, dtype=float)
+        if efield.shape != (3,):
+            raise ValueError('efield must have exactly three components')
+        if np.array_equal(efield, self.efield):
+            return False
+        self.efield = efield.copy()
+        self.reset()  # external state change, ASE's cache must be dropped
+        return True
+
+    def calculate(self, atoms=None, properties=None, system_changes=all_changes):
+        Calculator.calculate(self, atoms, properties, system_changes)
+        if atoms is None:
+            raise ValueError('No atoms supplied to FieldCalculator')
+
+        self.base_calculator.calculate(
+            atoms=atoms, properties=None, system_changes=system_changes
+        )
+        results = dict(self.base_calculator.results)
+        if 'born_effective_charges' not in results:
+            raise RuntimeError(
+                "base_calculator did not return 'born_effective_charges'. "
+                'Model must be trained with is_train_bec: true.'
+            )
+
+        bec = np.asarray(results['born_effective_charges'], dtype=float)
+        if bec.shape != (len(atoms), 3, 3):
+            raise RuntimeError(
+                f'Unexpected BEC shape {bec.shape}, expected ({len(atoms)}, 3, 3)'
+            )
+        if self.enforce_asr:
+            bec = bec - bec.mean(axis=0, keepdims=True)
+
+        # F_[i,beta] = Z_[i,alpha,beta] * E_alpha
+        field_forces = np.einsum('iab,a->ib', bec, self.efield)
+        results['forces'] = np.asarray(results['forces']) + field_forces
+        results['born_effective_charges'] = bec
+        self.last_field_forces = field_forces
+
+        if 'stress' in results and np.any(self.efield):
+            r = atoms.get_positions()
+            volume = atoms.get_volume()
+            fx, fy, fz = field_forces[:, 0], field_forces[:, 1], field_forces[:, 2]
+            rx, ry, rz = r[:, 0], r[:, 1], r[:, 2]
+            # ASE Voigt order: (xx, yy, zz, yz, xz, xy)
+            virial_field = np.array([
+                np.sum(fx * rx),
+                np.sum(fy * ry),
+                np.sum(fz * rz),
+                np.sum(fy * rz),
+                np.sum(fx * rz),
+                np.sum(fx * ry),
+            ])
+            results['stress'] = np.asarray(results['stress']) - virial_field / volume
+
+        self.results = results
+
+
 class SevenNetD3Calculator(SumCalculator):
     def __init__(
         self,

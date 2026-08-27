@@ -132,7 +132,7 @@ data:
 
 ### LAMMPS Interface with Electric Field
 
-The LAMMPS interface supports applying an external electric field directly through the `pair_coeff` command by adding the `efield` keyword followed by the field vector components (in eV/Å/e).
+The LAMMPS interface supports applying an external electric field directly through the `pair_coeff` command by adding the `efield` keyword followed by the field vector components (in eV/Å/e). The reported virial correctly includes the field's contribution (built from the same Born effective charges used for the field force), so `fix npt` under an applied field now integrates a thermodynamically consistent finite-field NPT ensemble.
 
 **Serial Calculation:**
 
@@ -150,6 +150,14 @@ pair_style     e3gnn/parallel
 # Apply an electric field of 0.01 in the z-direction (requires specifying the number of message-passing layers, e.g., 4)
 pair_coeff     * * 4 deployed_parallel_model_dir efield 0.0 0.0 0.01 Zr O
 ```
+
+An optional `enforce_asr` keyword, placed right after the field vector, projects the acoustic sum rule onto the predicted BEC tensors before computing both the field force and the virial, keeping them exactly mutually consistent:
+
+```lammps
+pair_coeff     * * model.pt efield 0.0 0.0 0.01 enforce_asr Zr O
+```
+
+The same finite-field force, virial, and `enforce_asr` option are also available from the ASE interface via `sevenn.calculator.FieldCalculator`, for users who prefer to drive MD from ASE rather than LAMMPS.
 
 ## Citation
 

@@ -16,9 +16,11 @@
 ------------------------------------------------------------------------- */
 
 #include <ATen/ops/from_blob.h>
+#include <array>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
 #include <string>
+#include <vector>
 
 #include <torch/script.h>
 #include <torch/torch.h>
@@ -86,6 +88,7 @@ void PairE3GNN::compute(int eflag, int vflag) {
   int nlocal = list->inum; // same as nlocal
   int *ilist = list->ilist;
   tagint *tag = atom->tag;
+  imageint *image = atom->image;
   std::unordered_map<int, int> tag_map;
 
   if (atom->tag_consecutive() == 0) {
@@ -251,27 +254,53 @@ void PairE3GNN::compute(int eflag, int vflag) {
     constexpr double inv_sqrt6 = 0.40824829046386302; // 1.0 / sqrt(6.0)
     constexpr double sqrt2_3   = 0.81649658092772603; // sqrt(2.0 / 3.0)
 
+    // Reconstruct every atom's Cartesian BEC tensor first (needed either
+    // way), and, if enforce_asr, subtract the mean so that Sum_i Z_i* = 0
+    // exactly before it is used for both the force and the virial -- this
+    // keeps them mutually consistent derivatives of the same (ASR-clean)
+    // quantity, rather than projecting only one of the two. Mirrors
+    // FieldCalculator.enforce_asr on the ASE side.
+    std::vector<std::array<double, 9>> bec_cart(nlocal);
+    std::array<double, 9> bec_mean = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     for (int itag = 0; itag < nlocal; itag++) {
-      int i = tag2i[itag];
-
-      // Extract from float tensor and immediately promote to double for all further math
       double i0 = bec[itag][0];
       double i1 = bec[itag][1], i2 = bec[itag][2], i3 = bec[itag][3];
       double i4 = bec[itag][4], i5 = bec[itag][5], i6 = bec[itag][6];
       double i7 = bec[itag][7], i8 = bec[itag][8];
 
       // Reconstruct Cartesian tensor directly in double precision
-      double c_xx =  inv_sqrt3 * i0 - inv_sqrt6 * i6 - inv_sqrt2 * i8;
-      double c_xy =  inv_sqrt2 * i3 + inv_sqrt2 * i5;
-      double c_xz = -inv_sqrt2 * i2 + inv_sqrt2 * i4;
+      // Order: xx, xy, xz, yx, yy, yz, zx, zy, zz
+      bec_cart[itag] = {
+          inv_sqrt3 * i0 - inv_sqrt6 * i6 - inv_sqrt2 * i8,
+          inv_sqrt2 * i3 + inv_sqrt2 * i5,
+          -inv_sqrt2 * i2 + inv_sqrt2 * i4,
+          -inv_sqrt2 * i3 + inv_sqrt2 * i5,
+          inv_sqrt3 * i0 + sqrt2_3 * i6,
+          inv_sqrt2 * i1 + inv_sqrt2 * i7,
+          inv_sqrt2 * i2 + inv_sqrt2 * i4,
+          -inv_sqrt2 * i1 + inv_sqrt2 * i7,
+          inv_sqrt3 * i0 - inv_sqrt6 * i6 + inv_sqrt2 * i8,
+      };
+      if (enforce_asr) {
+        for (int k = 0; k < 9; k++) bec_mean[k] += bec_cart[itag][k];
+      }
+    }
+    if (enforce_asr && nlocal > 0) {
+      for (int k = 0; k < 9; k++) bec_mean[k] /= nlocal;
+    }
 
-      double c_yx = -inv_sqrt2 * i3 + inv_sqrt2 * i5;
-      double c_yy =  inv_sqrt3 * i0 + sqrt2_3   * i6;
-      double c_yz =  inv_sqrt2 * i1 + inv_sqrt2 * i7;
+    for (int itag = 0; itag < nlocal; itag++) {
+      int i = tag2i[itag];
 
-      double c_zx =  inv_sqrt2 * i2 + inv_sqrt2 * i4;
-      double c_zy = -inv_sqrt2 * i1 + inv_sqrt2 * i7;
-      double c_zz =  inv_sqrt3 * i0 - inv_sqrt6 * i6 + inv_sqrt2 * i8;
+      double c_xx = bec_cart[itag][0] - bec_mean[0];
+      double c_xy = bec_cart[itag][1] - bec_mean[1];
+      double c_xz = bec_cart[itag][2] - bec_mean[2];
+      double c_yx = bec_cart[itag][3] - bec_mean[3];
+      double c_yy = bec_cart[itag][4] - bec_mean[4];
+      double c_yz = bec_cart[itag][5] - bec_mean[5];
+      double c_zx = bec_cart[itag][6] - bec_mean[6];
+      double c_zy = bec_cart[itag][7] - bec_mean[7];
+      double c_zz = bec_cart[itag][8] - bec_mean[8];
 
       double fx = (c_xx * efield[0] + c_xy * efield[1] + c_xz * efield[2]) * force->qe2f;
       double fy = (c_yx * efield[0] + c_yy * efield[1] + c_yz * efield[2]) * force->qe2f;
@@ -290,6 +319,30 @@ void PairE3GNN::compute(int eflag, int vflag) {
       f[i][0] += fx;
       f[i][1] += fy;
       f[i][2] += fz;
+
+      // Finite-field virial contribution. This is a one-body external-field
+      // force (F_i = Z_i*(R)*E), not a pairwise interaction, so it is not
+      // covered by the pairwise r_ij (x) f_ij virial below (which only
+      // accounts for the zero-field model stress). We follow the same
+      // convention LAMMPS itself uses for exactly this situation in
+      // fix_efield.cpp (a uniform external field acting on a per-atom
+      // force): virial_ab += F_a * r_b using *unwrapped* atomic coordinates,
+      // so the term stays well-defined across periodic image wraps over a
+      // trajectory. This equals the clamped-ion strain derivative of the
+      // field enthalpy term -Omega*P.E, and is exactly translation-invariant
+      // when the model's BEC tensors satisfy the acoustic sum rule
+      // (sum_i Z_i* = 0); it carries a residual origin-dependence
+      // proportional to any ASR violation otherwise (see enforce_asr).
+      if (vflag) {
+        double unwrap[3];
+        domain->unmap(x[i], image[i], unwrap);
+        virial[0] += fx * unwrap[0];
+        virial[1] += fy * unwrap[1];
+        virial[2] += fz * unwrap[2];
+        virial[3] += fx * unwrap[1];
+        virial[4] += fx * unwrap[2];
+        virial[5] += fy * unwrap[2];
+      }
     }
   }
 
@@ -417,6 +470,11 @@ void PairE3GNN::coeff(int narg, char **arg) {
     efield[1] = std::stod(arg[chem_arg_i + 2]);
     efield[2] = std::stod(arg[chem_arg_i + 3]);
     chem_arg_i += 4;
+
+    if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
+      enforce_asr = true;
+      chem_arg_i += 1;
+    }
   }
 
   bool found_flag = false;
