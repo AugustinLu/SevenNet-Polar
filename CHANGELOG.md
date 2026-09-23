@@ -1,6 +1,39 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - SevenNet-Polar
+Field forces change: re-examine field runs made with earlier versions (see "Fixed").
+
+### Fixed
+- **LAMMPS field force was transposed** (`pair_style e3gnn` and `e3gnn/parallel`). The BEC
+  convention is Z\*_ab = ∂P_a/∂r_b (field index first; model and DFT labels), so the force is
+  F = Z\*ᵀE. The pair styles applied Z\*E, which gives wrong components transverse to the field
+  whenever Z\* is non-symmetric (about 5–10% of the field force for ZrO₂ at 0.01–0.05 V/Å).
+  Runs made under a field with earlier versions, NVT included, should be re-examined.
+- **Batched dielectric readout divided by N+1.** `AtomReduce(reduce='mean')` counted the
+  zero-initialised buffer as an extra element in batched mode (training, validation/test
+  logging, `sevenn_inference`), so ε∞ was trained and logged as sum/(N+1) while ASE and LAMMPS
+  used sum/N. Models trained with `is_train_dielectric` should be retrained if ε∞ is needed.
+  Energy, force, stress and BEC readouts are unaffected.
+
+### Added
+- `enforce_asr [yes|no]` after `efield` in `pair_coeff` (default **yes**): subtract the mean BEC
+  so that Σ_i Z\*_i = 0 and the field forces sum to zero (no centre-of-mass drift). In the parallel
+  pair style the mean is global over all MPI ranks.
+- `sevenn.calculator.FieldCalculator`: the same field force and `enforce_asr` for ASE MD.
+- The pair styles log the field settings.
+
+### Documented
+- There is no field energy or field stress for these models: the predicted Z\*(R) is not the
+  Jacobian of a polarization function, so Z\*ᵀE is not the gradient of an energy. Reported
+  energy and pressure are those of the zero-field model; NVE conservation checks and energy
+  minimization under a field are not meaningful.
+
+### Note for users of the development branch between 2026-08-27 and this release
+- The one-body field virial added in #21 is removed. `efield_virial` is rejected with an
+  error. It added of order 10 kbar at |E| ≈ 0.04 V/Å on a 750-atom ZrO₂ cell and is not a strain
+  derivative of any energy.
+
 ## [0.12.2.dev]
 ### Added
 - Support OpenEquivariance
