@@ -205,7 +205,6 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
 
   double **x = atom->x;
   double **f = atom->f;
-  imageint *image = atom->image;
   int *type = atom->type;
   int nlocal = list->inum; // same as nlocal
   int nghost = atom->nghost;
@@ -483,11 +482,10 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
     constexpr double inv_sqrt6 = 0.40824829046386302; // 1.0 / sqrt(6.0)
     constexpr double sqrt2_3   = 0.81649658092772603; // sqrt(2.0 / 3.0)
 
-    // Reconstruct every atom's Cartesian BEC tensor first (needed either
-    // way), and, if enforce_asr, subtract the mean so that Sum_i Z_i* = 0
-    // exactly before it is used for both the force and the virial -- keeps
-    // them mutually consistent derivatives of the same (ASR-clean)
-    // quantity. Mirrors FieldCalculator.enforce_asr on the ASE side.
+    // Reconstruct every atom's Cartesian BEC tensor first and, if
+    // enforce_asr, subtract the mean so that Sum_i Z_i* = 0 exactly: the
+    // field forces then sum to zero (no centre-of-mass drift). Mirrors
+    // FieldCalculator.enforce_asr on the ASE side.
     std::vector<std::array<double, 9>> bec_cart(nlocal);
     std::array<double, 9> bec_mean = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     for (int graph_idx = 0; graph_idx < nlocal; graph_idx++) {
@@ -518,7 +516,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       // physical system (Sum over ALL atoms of Z_i* = 0), not of whatever
       // subset domain decomposition happened to assign to this rank -- a
       // per-rank local mean would make the correction (and therefore the
-      // force and virial) depend on the MPI rank count and processor
+      // force) depend on the MPI rank count and processor
       // decomposition, which must not happen. Reduce to the true global
       // sum, then divide by the global atom count (already available,
       // computed once above from atom->natoms -- not another reduction).
@@ -544,9 +542,16 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       double c_zy = bec_cart[graph_idx][7] - bec_mean[7];
       double c_zz = bec_cart[graph_idx][8] - bec_mean[8];
 
-      double fx = (c_xx * efield[0] + c_xy * efield[1] + c_xz * efield[2]) * force->qe2f;
-      double fy = (c_yx * efield[0] + c_yy * efield[1] + c_yz * efield[2]) * force->qe2f;
-      double fz = (c_zx * efield[0] + c_zy * efield[1] + c_zz * efield[2]) * force->qe2f;
+      // Z*_ab = dP_a/dr_b: the FIRST index is the field index (the model's
+      // convention -- see polar_output.py -- and the DFT labels'). The field
+      // force is therefore F_b = sum_a Z*_ab E_a, i.e. F = Z*^T E: a COLUMN
+      // of Z*, not a row. Earlier versions used the row (F = Z* E), which is
+      // wrong for any non-symmetric Z* (about 10% of the field force, in the
+      // transverse components, for ZrO2 at 0.05 V/A). The ASE
+      // FieldCalculator uses the same convention (einsum 'iab,a->ib').
+      double fx = (c_xx * efield[0] + c_yx * efield[1] + c_zx * efield[2]) * force->qe2f;
+      double fy = (c_xy * efield[0] + c_yy * efield[1] + c_zy * efield[2]) * force->qe2f;
+      double fz = (c_xz * efield[0] + c_yz * efield[1] + c_zz * efield[2]) * force->qe2f;
 
       tagint *tag = atom->tag;
       if (update->ntimestep == update->firststep && tag[i] <= 3 && lmp->logfile) {
@@ -563,23 +568,11 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
       f[i][1] += fy;
       f[i][2] += fz;
 
-      // Finite-field virial contribution (one-body external-field force,
-      // not covered by the pairwise edge-vec (x) dE_dr virial below). Same
-      // convention as LAMMPS's own fix_efield.cpp for a uniform field
-      // acting on a per-atom force: virial_ab += F_a * r_b using
-      // *unwrapped* atomic coordinates. This is the clamped-ion strain
-      // derivative of the field enthalpy term -Omega*P.E; see enforce_asr
-      // for its translation-invariance caveat under ASR violation.
-      if (vflag) {
-        double unwrap[3];
-        domain->unmap(x[i], image[i], unwrap);
-        virial[0] += fx * unwrap[0];
-        virial[1] += fy * unwrap[1];
-        virial[2] += fz * unwrap[2];
-        virial[3] += fx * unwrap[1];
-        virial[4] += fx * unwrap[2];
-        virial[5] += fy * unwrap[2];
-      }
+      // No field virial. The field force Z*^T E is not the gradient of any
+      // energy (the Z*(R) field is not a Jacobian of a polarization function),
+      // so there is no field energy whose strain derivative could define
+      // one. fix npt under a field therefore sees only the model's zero-field
+      // stress, as with LAMMPS's own fix efield by default.
     }
   }
 
@@ -749,9 +742,29 @@ void PairE3GNNParallel::coeff(int narg, char **arg) {
     efield[2] = std::stod(arg[chem_arg_i + 3]);
     chem_arg_i += 4;
 
-    if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
-      enforce_asr = true;
-      chem_arg_i += 1;
+    // Optional keywords after the field vector, in any order:
+    //   enforce_asr [yes|no]   default yes (a bare "enforce_asr" means yes)
+    while (narg > chem_arg_i) {
+      if (strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
+        chem_arg_i += 1;
+        if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "no") == 0) {
+          enforce_asr = false;
+          chem_arg_i += 1;
+        } else {
+          enforce_asr = true;
+          if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "yes") == 0) chem_arg_i += 1;
+        }
+      } else if (strcmp(arg[chem_arg_i], "efield_virial") == 0) {
+        error->all(FLERR, "e3gnn/parallel: efield_virial is not supported: the field force "
+                          "Z*^T E derives from no energy, so there is no field virial");
+      } else {
+        break;
+      }
+    }
+    if (lmp->logfile) {
+      fprintf(lmp->logfile,
+              "e3gnn/parallel: efield = (%g, %g, %g) V/A, enforce_asr %s, no field virial\n",
+              efield[0], efield[1], efield[2], enforce_asr ? "yes" : "no");
     }
   }
 

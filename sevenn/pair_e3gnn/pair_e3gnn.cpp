@@ -88,7 +88,6 @@ void PairE3GNN::compute(int eflag, int vflag) {
   int nlocal = list->inum; // same as nlocal
   int *ilist = list->ilist;
   tagint *tag = atom->tag;
-  imageint *image = atom->image;
   std::unordered_map<int, int> tag_map;
 
   if (atom->tag_consecutive() == 0) {
@@ -254,11 +253,9 @@ void PairE3GNN::compute(int eflag, int vflag) {
     constexpr double inv_sqrt6 = 0.40824829046386302; // 1.0 / sqrt(6.0)
     constexpr double sqrt2_3   = 0.81649658092772603; // sqrt(2.0 / 3.0)
 
-    // Reconstruct every atom's Cartesian BEC tensor first (needed either
-    // way), and, if enforce_asr, subtract the mean so that Sum_i Z_i* = 0
-    // exactly before it is used for both the force and the virial -- this
-    // keeps them mutually consistent derivatives of the same (ASR-clean)
-    // quantity, rather than projecting only one of the two. Mirrors
+    // Reconstruct every atom's Cartesian BEC tensor first and, if
+    // enforce_asr, subtract the mean so that Sum_i Z_i* = 0 exactly: the
+    // field forces then sum to zero (no centre-of-mass drift). Mirrors
     // FieldCalculator.enforce_asr on the ASE side.
     std::vector<std::array<double, 9>> bec_cart(nlocal);
     std::array<double, 9> bec_mean = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -302,9 +299,16 @@ void PairE3GNN::compute(int eflag, int vflag) {
       double c_zy = bec_cart[itag][7] - bec_mean[7];
       double c_zz = bec_cart[itag][8] - bec_mean[8];
 
-      double fx = (c_xx * efield[0] + c_xy * efield[1] + c_xz * efield[2]) * force->qe2f;
-      double fy = (c_yx * efield[0] + c_yy * efield[1] + c_yz * efield[2]) * force->qe2f;
-      double fz = (c_zx * efield[0] + c_zy * efield[1] + c_zz * efield[2]) * force->qe2f;
+      // Z*_ab = dP_a/dr_b: the FIRST index is the field index (the model's
+      // convention -- see polar_output.py -- and the DFT labels'). The field
+      // force is therefore F_b = sum_a Z*_ab E_a, i.e. F = Z*^T E: a COLUMN
+      // of Z*, not a row. Earlier versions used the row (F = Z* E), which is
+      // wrong for any non-symmetric Z* (about 10% of the field force, in the
+      // transverse components, for ZrO2 at 0.05 V/A). The ASE
+      // FieldCalculator uses the same convention (einsum 'iab,a->ib').
+      double fx = (c_xx * efield[0] + c_yx * efield[1] + c_zx * efield[2]) * force->qe2f;
+      double fy = (c_xy * efield[0] + c_yy * efield[1] + c_zy * efield[2]) * force->qe2f;
+      double fz = (c_xz * efield[0] + c_yz * efield[1] + c_zz * efield[2]) * force->qe2f;
 
       if (update->ntimestep == update->firststep && tag[i] <= 3 && lmp->logfile) {
         fprintf(lmp->logfile, "Latest MD Step: %ld\n", static_cast<long>(update->ntimestep));
@@ -320,29 +324,11 @@ void PairE3GNN::compute(int eflag, int vflag) {
       f[i][1] += fy;
       f[i][2] += fz;
 
-      // Finite-field virial contribution. This is a one-body external-field
-      // force (F_i = Z_i*(R)*E), not a pairwise interaction, so it is not
-      // covered by the pairwise r_ij (x) f_ij virial below (which only
-      // accounts for the zero-field model stress). We follow the same
-      // convention LAMMPS itself uses for exactly this situation in
-      // fix_efield.cpp (a uniform external field acting on a per-atom
-      // force): virial_ab += F_a * r_b using *unwrapped* atomic coordinates,
-      // so the term stays well-defined across periodic image wraps over a
-      // trajectory. This equals the clamped-ion strain derivative of the
-      // field enthalpy term -Omega*P.E, and is exactly translation-invariant
-      // when the model's BEC tensors satisfy the acoustic sum rule
-      // (sum_i Z_i* = 0); it carries a residual origin-dependence
-      // proportional to any ASR violation otherwise (see enforce_asr).
-      if (vflag) {
-        double unwrap[3];
-        domain->unmap(x[i], image[i], unwrap);
-        virial[0] += fx * unwrap[0];
-        virial[1] += fy * unwrap[1];
-        virial[2] += fz * unwrap[2];
-        virial[3] += fx * unwrap[1];
-        virial[4] += fx * unwrap[2];
-        virial[5] += fy * unwrap[2];
-      }
+      // No field virial. The field force Z*^T E is not the gradient of any
+      // energy (the Z*(R) field is not a Jacobian of a polarization function),
+      // so there is no field energy whose strain derivative could define
+      // one. fix npt under a field therefore sees only the model's zero-field
+      // stress, as with LAMMPS's own fix efield by default.
     }
   }
 
@@ -471,9 +457,29 @@ void PairE3GNN::coeff(int narg, char **arg) {
     efield[2] = std::stod(arg[chem_arg_i + 3]);
     chem_arg_i += 4;
 
-    if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
-      enforce_asr = true;
-      chem_arg_i += 1;
+    // Optional keywords after the field vector, in any order:
+    //   enforce_asr [yes|no]   default yes (a bare "enforce_asr" means yes)
+    while (narg > chem_arg_i) {
+      if (strcmp(arg[chem_arg_i], "enforce_asr") == 0) {
+        chem_arg_i += 1;
+        if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "no") == 0) {
+          enforce_asr = false;
+          chem_arg_i += 1;
+        } else {
+          enforce_asr = true;
+          if (narg > chem_arg_i && strcmp(arg[chem_arg_i], "yes") == 0) chem_arg_i += 1;
+        }
+      } else if (strcmp(arg[chem_arg_i], "efield_virial") == 0) {
+        error->all(FLERR, "e3gnn: efield_virial is not supported: the field force "
+                          "Z*^T E derives from no energy, so there is no field virial");
+      } else {
+        break;
+      }
+    }
+    if (lmp->logfile) {
+      fprintf(lmp->logfile,
+              "e3gnn: efield = (%g, %g, %g) V/A, enforce_asr %s, no field virial\n",
+              efield[0], efield[1], efield[2], enforce_asr ? "yes" : "no");
     }
   }
 

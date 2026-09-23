@@ -284,44 +284,24 @@ class SevenNetCalculator(Calculator):
 
 
 class FieldCalculator(Calculator):
-    """Adds the finite-field force AND its matching virial/stress to a
-    base calculator's results, from a model's predicted Born effective
-    charge (BEC) tensor.
+    """Adds the finite-field force to a base calculator's results, from a
+    model's predicted Born effective charge (BEC) tensor.
 
-    F_i = F_i^0 + Z_i* . E   (already the existing convention, e.g. in
-    the sevenn LAMMPS pair style's ``efield`` keyword)
+    Convention: ``Z*[i, a, b] = dP_a / dr_{i,b}`` -- the FIRST index is the
+    field index (the model's convention, see ``polar_output.py``, and that
+    of the DFT labels). The field force is therefore
 
-    The virial/stress contribution was, until this fix, silently
-    omitted everywhere this force has been applied (LAMMPS pair style,
-    and every ASE-based finite-field driver script surveyed for this
-    fix) -- meaning any barostat coupled to such a calculator was blind
-    to the field's contribution to the stress.
+        F_{i,b} = F0_{i,b} + sum_a Z*_{i,ab} E_a      (F = Z*^T E)
 
-    The virial term is the clamped-ion strain derivative of the field
-    enthalpy term -Omega*P.E, using the same Z_i* already used for the
-    force:
+    The LAMMPS pair styles used the transpose (F = Z* E) before 2026-09;
+    both interfaces now agree.
 
-        stress_field = -(1/V) * sum_i r_i (x) F_i^field
-
-    following the same one-body external-field convention LAMMPS's own
-    ``fix efield`` uses (virial += F * r, using *unwrapped* atomic
-    coordinates). ``atoms.get_positions()`` is used directly: ASE does
-    not wrap atomic coordinates back into the cell during MD unless
-    ``atoms.wrap()`` is called explicitly, so positions are ordinarily
-    already "unwrapped" in the required sense. If your workflow calls
-    ``atoms.wrap()`` mid-trajectory, be aware this term is only exactly
-    translation-invariant when the BEC tensors satisfy the acoustic sum
-    rule (sum_i Z_i* = 0) -- exact for models whose BEC output satisfies
-    it by construction, only approximate otherwise (see ``enforce_asr``
-    below).
-
-    Sign/ordering convention is derived directly from
-    ``SevenNetCalculator.output_to_results``, which reports
-    ``stress = -inferred_stress`` reordered to ASE's native Voigt order
-    (xx, yy, zz, yz, xz, xy) -- i.e. the same relationship
-    ``ASE stress = -(1/V) * LAMMPS virial`` is used here for the field
-    term, rather than assuming ASE's stress sign convention
-    independently.
+    No field energy or stress is added. The BEC is predicted per atom and
+    is not the Jacobian of any polarization function, so the field force
+    is not the gradient of an energy: there is no field energy term, and so
+    no field virial. Energy and stress are those of the base calculator.
+    Thermostatted MD is unaffected; NVE energy-conservation checks and
+    energy minimization under a field are not meaningful.
 
     Parameters
     ----------
@@ -330,13 +310,9 @@ class FieldCalculator(Calculator):
         ``SevenNetCalculator`` with a model trained with
         ``is_train_bec: true``).
     enforce_asr: bool, default=True
-        If True, project out the mean BEC (``Z* -= mean(Z*, axis=0)``)
-        before computing both the force and the virial, so they remain
-        exactly mutually consistent and the virial stays exactly
-        translation-invariant even for ``direct``-method models whose
-        raw BEC output violates the acoustic sum rule. If False, the
-        raw (possibly ASR-violating) BEC is used, matching the current
-        LAMMPS pair style's behavior.
+        Project out the mean BEC (``Z* -= mean(Z*, axis=0)``) before it is
+        used, so the field forces sum to zero (no centre-of-mass drift).
+        Same default as the LAMMPS ``enforce_asr`` keyword.
     """
 
     implemented_properties = [
@@ -344,7 +320,17 @@ class FieldCalculator(Calculator):
         'born_effective_charges', 'dielectric_tensor',
     ]
 
-    def __init__(self, base_calculator, enforce_asr: bool = True, **kwargs) -> None:
+    def __init__(
+        self, base_calculator, enforce_asr: bool = True, **kwargs
+    ) -> None:
+        # ase's Calculator would silently store an unknown keyword as a
+        # parameter, so a script written for the removed option would run
+        # without the virial it asked for. Fail loudly instead.
+        if 'field_virial' in kwargs:
+            raise TypeError(
+                'FieldCalculator: field_virial was removed. The field force '
+                'Z*^T E derives from no energy, so there is no field virial.'
+            )
         super().__init__(**kwargs)
         self.base_calculator = base_calculator
         self.enforce_asr = enforce_asr
@@ -395,22 +381,6 @@ class FieldCalculator(Calculator):
         results['forces'] = np.asarray(results['forces']) + field_forces
         results['born_effective_charges'] = bec
         self.last_field_forces = field_forces
-
-        if 'stress' in results and np.any(self.efield):
-            r = atoms.get_positions()
-            volume = atoms.get_volume()
-            fx, fy, fz = field_forces[:, 0], field_forces[:, 1], field_forces[:, 2]
-            rx, ry, rz = r[:, 0], r[:, 1], r[:, 2]
-            # ASE Voigt order: (xx, yy, zz, yz, xz, xy)
-            virial_field = np.array([
-                np.sum(fx * rx),
-                np.sum(fy * ry),
-                np.sum(fz * rz),
-                np.sum(fy * rz),
-                np.sum(fx * rz),
-                np.sum(fx * ry),
-            ])
-            results['stress'] = np.asarray(results['stress']) - virial_field / volume
 
         self.results = results
 

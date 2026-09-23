@@ -132,7 +132,9 @@ data:
 
 ### LAMMPS Interface with Electric Field
 
-The LAMMPS interface supports applying an external electric field directly through the `pair_coeff` command by adding the `efield` keyword followed by the field vector components (in eV/Å/e). The reported virial correctly includes the field's contribution (built from the same Born effective charges used for the field force), so `fix npt` under an applied field now integrates a thermodynamically consistent finite-field NPT ensemble.
+The LAMMPS interface supports applying an external electric field directly through the `pair_coeff` command by adding the `efield` keyword followed by the field vector components (in V/Å). Each atom receives the force F_b = Σ_a Z\*_ab E_a, where the first index of the Born effective charge tensor is the field direction (Z\*_ab = ∂P_a/∂r_b).
+
+> **Note (2026-09):** earlier versions of the pair styles applied the transpose of Z\* (F = Z\* E). For non-symmetric Z\* this gives wrong force components transverse to the field (about 10% of the field force for ZrO2 at 0.05 V/Å). Runs made with those versions, NVT included, should be re-examined wherever transverse forces matter.
 
 **Serial Calculation:**
 
@@ -151,13 +153,19 @@ pair_style     e3gnn/parallel
 pair_coeff     * * 4 deployed_parallel_model_dir efield 0.0 0.0 0.01 Zr O
 ```
 
-An optional `enforce_asr` keyword, placed right after the field vector, projects the acoustic sum rule onto the predicted BEC tensors before computing both the field force and the virial, keeping them exactly mutually consistent:
+Optional keywords may follow the field vector, in any order:
+
+| keyword | default | meaning |
+|---|---|---|
+| `enforce_asr [yes\|no]` | `yes` | Project out the mean BEC so that Σ_i Z\*_i = 0 before it is used: the field forces then sum to zero (no centre-of-mass drift). A bare `enforce_asr` means `yes`. |
 
 ```lammps
-pair_coeff     * * model.pt efield 0.0 0.0 0.01 enforce_asr Zr O
+pair_coeff     * * model.pt efield 0.0 0.0 0.01 enforce_asr yes Zr O
 ```
 
-The same finite-field force, virial, and `enforce_asr` option are also available from the ASE interface via `sevenn.calculator.FieldCalculator`, for users who prefer to drive MD from ASE rather than LAMMPS.
+**No field energy, no field stress.** The BEC is predicted per atom and is not the Jacobian of any polarization function, so the field force Z\*ᵀE is not the gradient of an energy. There is therefore no field energy and no field virial: the reported energy and pressure are those of the zero-field model, and `fix npt` under a field sees only the zero-field stress (as with LAMMPS's own `fix efield` by default). Thermostatted MD (NVT, or NPT with that caveat) is fine. NVE energy-conservation checks and energy minimization under a field are not meaningful.
+
+The same field force and `enforce_asr` are available from ASE via `sevenn.calculator.FieldCalculator`, for users who prefer to drive MD from ASE rather than LAMMPS.
 
 ## Citation
 

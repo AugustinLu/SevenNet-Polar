@@ -36,7 +36,7 @@ private:
 
   bool has_efield = false;
   double efield[3];
-  bool enforce_asr = false;
+  bool enforce_asr = true;   // default yes since 2026-09
 
 public:
   PairE3GNN(class LAMMPS *);
