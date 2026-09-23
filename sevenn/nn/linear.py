@@ -146,7 +146,14 @@ class AtomReduce(nn.Module):
             if src.dim() > 1:
                 batch_idx = batch_idx.view(-1, 1).expand(-1, src.shape[1])
 
-            output.scatter_reduce_(0, batch_idx, src, reduce=self.reduce)
+            # include_self=False: `output` is only a zero-initialised buffer. With
+            # torch's default (True) that zero is counted as an extra element, so
+            # reduce='mean' returned sum/(N+1) instead of sum/N and disagreed with
+            # the unbatched branch below (ASE calculator, LAMMPS). 'sum' is
+            # unaffected either way.
+            output.scatter_reduce_(
+                0, batch_idx, src, reduce=self.reduce, include_self=False
+            )
             data[self.key_output] = output * self.constant
         else:
             if self.reduce == 'mean':
