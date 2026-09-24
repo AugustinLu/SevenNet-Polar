@@ -18,6 +18,7 @@
 #include <ATen/core/Dict.h>
 #include <ATen/core/ivalue_inl.h>
 #include <ATen/ops/from_blob.h>
+#include <algorithm>
 #include <array>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
@@ -231,7 +232,8 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   tag_to_graph_idx_ptr = tag_to_graph_idx;
 
   int graph_indexer = nlocal;
-  int graph_index_to_i[ntotal];
+  std::vector<int> graph_index_to_i_vec(ntotal);
+  int *graph_index_to_i = graph_index_to_i_vec.data();
 
   int *numneigh = list->numneigh;      // j loop cond
   int **firstneigh = list->firstneigh; // j list
@@ -241,9 +243,14 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   std::vector<long> node_type;
   std::vector<long> node_type_ghost;
 
-  float edge_vec[nedges_upper_bound][3];
-  long edge_idx_src[nedges_upper_bound];
-  long edge_idx_dst[nedges_upper_bound];
+  // Heap buffers, not stack VLAs: they reach megabytes for large systems.
+  const size_t nbuf = std::max(nedges_upper_bound, 1);
+  std::vector<std::array<float, 3>> edge_vec_buf(nbuf);
+  auto *edge_vec = edge_vec_buf.data();
+  std::vector<long> edge_idx_src_vec(nbuf);
+  std::vector<long> edge_idx_dst_vec(nbuf);
+  long *edge_idx_src = edge_idx_src_vec.data();
+  long *edge_idx_dst = edge_idx_dst_vec.data();
 
   int nedges = 0;
   for (int ii = 0; ii < inum; ii++) {
@@ -315,7 +322,7 @@ void PairE3GNNParallel::compute(int eflag, int vflag) {
   auto inp_edge_index =
       torch::stack({edge_idx_src_tensor, edge_idx_dst_tensor});
 
-  auto inp_edge_vec = torch::from_blob(edge_vec, {nedges, 3}, FLOAT_TYPE);
+  auto inp_edge_vec = torch::from_blob(edge_vec->data(), {nedges, 3}, FLOAT_TYPE);
 
   // r_original requires grad True
   inp_edge_vec.set_requires_grad(true);

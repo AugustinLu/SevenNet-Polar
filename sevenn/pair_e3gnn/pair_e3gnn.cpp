@@ -16,9 +16,11 @@
 ------------------------------------------------------------------------- */
 
 #include <ATen/ops/from_blob.h>
+#include <algorithm>
 #include <array>
 #include <c10/core/Scalar.h>
 #include <c10/core/TensorOptions.h>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -111,18 +113,20 @@ void PairE3GNN::compute(int eflag, int vflag) {
   int *type = atom->type;
   long num_atoms[1] = {nlocal};
 
-  int tag2i[nlocal];
+  std::vector<int> tag2i_vec(nlocal);
+  int *tag2i = tag2i_vec.data();
 
   int *numneigh = list->numneigh;      // j loop cond
   int **firstneigh = list->firstneigh; // j list
 
-  int bound;
-  if (this->nedges_bound == -1) {
-    bound = std::accumulate(numneigh, numneigh + nlocal, 0);
-  } else {
-    bound = this->nedges_bound;
-  }
-  const int nedges_upper_bound = bound;
+  // Size the edge buffers to the true upper bound. The fill loop below is
+  // not bounds checked, so the buffers must hold every neighbour-list entry.
+  // An earlier adaptive bound (1.2 x the previous step's edge count)
+  // overflowed whenever the edge count grew by more than 20% in one step
+  // (neighbour-list rebuilds at high temperature, a moving NPT cell),
+  // corrupting the stack and crashing later in unrelated allocations.
+  const int nedges_upper_bound =
+      std::accumulate(numneigh, numneigh + nlocal, 0);
 
   float cell[3][3];
   cell[0][0] = domain->boxhi[0] - domain->boxlo[0];
@@ -146,13 +150,19 @@ void PairE3GNN::compute(int eflag, int vflag) {
   torch::Tensor inp_cell_volume =
       torch::dot(inp_cell[0], torch::cross(inp_cell[1], inp_cell[2], 0));
 
-  float pbc_shift_tmp[nedges_upper_bound][3];
+  // Heap buffers, not stack VLAs: they reach megabytes for large systems.
+  // Allocated with at least one element so data() is valid for from_blob.
+  const size_t nbuf = std::max(nedges_upper_bound, 1);
+  std::vector<std::array<float, 3>> pbc_shift_vec(nbuf);
+  auto *pbc_shift_tmp = pbc_shift_vec.data();
 
   auto node_type = inp_node_type.accessor<long, 1>();
   auto pos = inp_pos.accessor<float, 2>();
 
-  long edge_idx_src[nedges_upper_bound];
-  long edge_idx_dst[nedges_upper_bound];
+  std::vector<long> edge_idx_src_vec(nbuf);
+  std::vector<long> edge_idx_dst_vec(nbuf);
+  long *edge_idx_src = edge_idx_src_vec.data();
+  long *edge_idx_dst = edge_idx_dst_vec.data();
 
   int nedges = 0;
 
@@ -208,7 +218,7 @@ void PairE3GNN::compute(int eflag, int vflag) {
   torch::Tensor cell_inv_tensor =
       inp_cell.inverse().transpose(0, 1).unsqueeze(0).to(device);
   torch::Tensor pbc_shift_tmp_tensor =
-      torch::from_blob(pbc_shift_tmp, {nedges, 3}, FLOAT_TYPE)
+      torch::from_blob(pbc_shift_tmp->data(), {nedges, 3}, FLOAT_TYPE)
           .view({nedges, 3, 1})
           .to(device);
   torch::Tensor inp_cell_shift =
@@ -354,14 +364,6 @@ void PairE3GNN::compute(int eflag, int vflag) {
       int i = tag2i[itag];
       eatom[i] += atomic_energy[itag];
     }
-  }
-
-  // if it was the first MD step
-  if (this->nedges_bound == -1) {
-    this->nedges_bound = nedges * 1.2;
-  } // else if the nedges is too small, increase the bound
-  else if (nedges > this->nedges_bound / 1.2) {
-    this->nedges_bound = nedges * 1.2;
   }
 }
 

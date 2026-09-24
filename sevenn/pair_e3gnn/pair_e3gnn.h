@@ -32,7 +32,6 @@ private:
   torch::Device device = torch::kCPU;
   int nelements;
 
-  int nedges_bound = -1;
 
   bool has_efield = false;
   double efield[3];
