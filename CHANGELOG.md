@@ -29,11 +29,6 @@ Field forces change: re-examine field runs made with earlier versions (see "Fixe
   energy and pressure are those of the zero-field model; NVE conservation checks and energy
   minimization under a field are not meaningful.
 
-### Note for users of the development branch between 2026-08-27 and this release
-- The one-body field virial added in #21 is removed. `efield_virial` is rejected with an
-  error. It added of order 10 kbar at |E| ≈ 0.04 V/Å on a 750-atom ZrO₂ cell and is not a strain
-  derivative of any energy.
-
 ## [0.12.2.dev]
 ### Added
 - Support OpenEquivariance

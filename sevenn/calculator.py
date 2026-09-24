@@ -324,11 +324,11 @@ class FieldCalculator(Calculator):
         self, base_calculator, enforce_asr: bool = True, **kwargs
     ) -> None:
         # ase's Calculator would silently store an unknown keyword as a
-        # parameter, so a script written for the removed option would run
-        # without the virial it asked for. Fail loudly instead.
+        # parameter, so a request for a field virial would run without it.
+        # Fail loudly instead.
         if 'field_virial' in kwargs:
             raise TypeError(
-                'FieldCalculator: field_virial was removed. The field force '
+                'FieldCalculator: field_virial is not supported. The field force '
                 'Z*^T E derives from no energy, so there is no field virial.'
             )
         super().__init__(**kwargs)
