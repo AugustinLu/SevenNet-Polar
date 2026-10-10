@@ -115,7 +115,7 @@ def test_nested_subset_keeps_holdouts_and_provenance(tmp_path):
         support.prepare_subset_data(tmp_path, tmp_path / 'modified', 5)
 
 
-@pytest.mark.parametrize('dataset', ['zro2', 'li3po4'])
+@pytest.mark.parametrize('dataset', ['zro2', 'zro2_stoichiometric', 'li3po4'])
 def test_official_subset_pool_preserves_labels(tmp_path, dataset):
     structures, paths, _, manifest, _ = support.prepare_subset_data(
         ROOT, tmp_path / dataset, 50, dataset=dataset
@@ -124,6 +124,12 @@ def test_official_subset_pool_preserves_labels(tmp_path, dataset):
     assert len(structures) == 90
     assert len(set(sum(manifest['source_ids'].values(), []))) == 90
     assert manifest['original_source']['doi'] == '10.5281/zenodo.21322761'
+    if dataset == 'zro2_stoichiometric':
+        assert {a.get_chemical_formula() for a in structures} == {
+            'O32Zr16',
+            'O64Zr32',
+        }
+        assert {len(a) for a in structures} == {48, 96}
     reference_sums = []
     for path in paths.values():
         for atoms in read(path, ':'):
