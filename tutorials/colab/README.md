@@ -65,6 +65,10 @@ Repeat on an A100 for the advanced notebook. Download each run's ZIP before stop
 
 The introductory notebook flow focuses on RMSE, parity and checkpoint reuse. The [separate dataset study](SUBSET_STUDY.md) retains tensor-sum diagnostics and their reference-label caveats for future refinement. `support.make_config(..., monitor_asr=True)` opts into native monitoring; it is off in the notebooks. The validation-only experiment harness enables these extra diagnostics.
 
+## Stoichiometric ZrO₂ alternative
+
+The [restricted ZrO₂ study](STOICHIOMETRIC_ZRO2.md) tests 48/96-atom cells with oxygen-vacancy frames excluded. To try it, choose `DATASET='zro2_stoichiometric'`, 50 training structures, 32 channels and 100 epochs. Its fixed 20/20 holdouts and official labels are preserved; standard T4 training took 11.5 minutes in the validation run. The existing Li₃PO₄ defaults remain available; the optional MD example uses Li₃PO₄.
+
 ## Reproduce the bounded subset comparison
 
 The bundled pools contain only 240 structures per material: a nested reservoir of 200 training structures and fixed 20/20 validation/test sets. Original source IDs, checksums and composition-balanced selection are saved in the manifests. No full-dataset training is needed. Li₁₁O₁₆P₄ reference tensor sums are approximately 1 e; these labels are retained, and `sum_error_max_abs_e` measures agreement with their tensor sums.

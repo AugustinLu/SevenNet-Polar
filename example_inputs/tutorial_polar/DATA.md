@@ -55,3 +55,22 @@ Please cite the record, the SevenNet-Polar paper, and the source-material paper:
 
 The smaller 30-structure example and its attribution remain in
 [`../training_polar`](../training_polar/DATA.md).
+
+## Stoichiometric ZrO₂ teaching alternative
+
+`zro2_stoichiometric` contains only O₃₂Zr₁₆ (48 atoms) and O₆₄Zr₃₂ (96 atoms),
+excluding oxygen-vacancy compositions by atom counts. Its 240-frame pool has
+100 training candidates per composition, interleaved for nested prefixes, plus
+10 validation and 10 test frames per composition. The prior mixed-pool
+stoichiometric holdouts are retained; additional holdouts exclude the previous
+pool. This supports an audit on the shared validation frames. No labels or
+model errors determine membership, and no BEC correction is applied.
+The chemical restriction makes this a narrower teaching task; it does not
+establish that defects caused any previous prediction error or that sum errors
+are guaranteed to be small.
+
+To recreate the pool from the checksum-matched official file:
+
+```bash
+python tutorials/colab/prepare_stoichiometric_zro2.py --source /path/to/zro2_10103.xyz --output /tmp/zro2-stoichiometric
+```

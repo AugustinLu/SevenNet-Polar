@@ -1,0 +1,1317 @@
+{
+  "note": "Independent ASE CPU reload on validation only; full-precision original reference labels, float64 tensor sums; same ten shared validation structures as mixed baseline. No Test predictions.",
+  "runs": [
+    {
+      "mode": "bec16_50",
+      "training_structures": 50,
+      "epochs": 100,
+      "best_epoch": 100,
+      "training_seconds": 202.23455390380695,
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.08818552432893986,
+        "BEC off-diagonal RMSE e": 0.056397357045190354,
+        "sum_error_max_abs_e": 2.275551537540895,
+        "sum_error_median_e": 0.8021060228347783
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.08673268270434567,
+        "BEC off-diagonal RMSE e": 0.05693988434365847,
+        "sum_error_max_abs_e": 1.3286482687811256,
+        "sum_error_median_e": 0.7265636970928975
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.563509464263916,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 1.5635094442639166
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.26225709915161133,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.26225711915161076
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.8726100921630859,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.8726100821630873
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.8321330547332764,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.8321330447332778
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 2.2755515575408936,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 2.275551537540895
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2456399560905993,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.24563996609059935
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.40549373626708984,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.4054937662670903
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.4868285655975342,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.4868285855975345
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.3521380424499512,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 1.3521380724499505
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.864882770110853,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.8648827701108533
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.328648328781128,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 1.3286482687811256
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.34132885932922363,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.3413288493292228
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4786853790283203,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.47868535902831866
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8362908363342285,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 0.8362908463342298
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5648558139801025,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.5648558239801043
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7720789909362793,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.7720790009362788
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.9017376899719238,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.9017376899719229
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.1680433750152588,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 1.168043375015258
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6209943294525146,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.6209943494525172
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.3382797073572874,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.33827969735728736
+        }
+      ]
+    },
+    {
+      "mode": "bec16_50_e200",
+      "training_structures": 50,
+      "epochs": 200,
+      "best_epoch": 200,
+      "training_seconds": 383.45426219468936,
+      "gpu": "NVIDIA A800 40GB Active",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.07639455875794092,
+        "BEC off-diagonal RMSE e": 0.04906105815175487,
+        "sum_error_max_abs_e": 1.5837142267498794,
+        "sum_error_median_e": 0.5435465624264528
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.07516688322320092,
+        "BEC off-diagonal RMSE e": 0.04960169003281409,
+        "sum_error_max_abs_e": 0.8434214791980006,
+        "sum_error_median_e": 0.4700850544383247
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8291659355163574,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 0.829165915516358
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2375028026290238,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.23750277262902375
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.40106916427612305,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.40106915427612444
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.47135162353515625,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.47135161353515764
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.583714246749878,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 1.5837142267498794
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.18247558001894504,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.18247556001894488
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.3055150508880615,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.305515080888062
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.43384671211242676,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.4338467321124271
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7823958396911621,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.7823958696911615
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6260979175567627,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.6260979175567649
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7721898555755615,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.7721897955755592
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2509068539366126,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.2509068639366126
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5694096088409424,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.5694095888409407
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5760698318481445,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 0.5760698418481458
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4688185453414917,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.4688184953414918
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.37074804306030273,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.3707480630603013
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6504068374633789,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.6504068074633786
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.9076864719390869,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.907686471939086
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.843421459197998,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.8434214791980006
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5176835060119629,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.5176835360119649
+        }
+      ]
+    },
+    {
+      "mode": "bec32_100",
+      "training_structures": 100,
+      "epochs": 100,
+      "best_epoch": 100,
+      "training_seconds": 354.41388848470524,
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.05879451201916095,
+        "BEC off-diagonal RMSE e": 0.04007141867431408,
+        "sum_error_max_abs_e": 0.9153497319085684,
+        "sum_error_median_e": 0.47318289164123517
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.05885059268729647,
+        "BEC off-diagonal RMSE e": 0.04097587358182086,
+        "sum_error_max_abs_e": 0.7726778984069802,
+        "sum_error_median_e": 0.4128183007823135
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6632049083709717,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 0.6632049283709724
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4532041549682617,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.4532041349682623
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2889328848104924,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.2889328948104923
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2850809097290039,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.28508089972900286
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7051616907119751,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 0.705161700711975
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4564061164855957,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.4564061164855957
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.9153497219085693,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.9153497319085684
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.372432466596365,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.3724324665963647
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.525723934173584,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.5257239641735834
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7726778984069824,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.7726778984069802
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5506188869476318,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.5506188969476322
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2379070520401001,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.23790704204010016
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.45977783203125,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.45977783203124956
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.351773789152503,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 0.35177376915250275
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4865880012512207,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.4865879512512208
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.23008966445922852,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.23008968445922973
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6393008232116699,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.6393007932116697
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.4904930591583252,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.49049307915832596
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.3390629291534424,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.33906290915343984
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5505473904777318,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.550547380477732
+        }
+      ]
+    },
+    {
+      "mode": "bec32_30",
+      "training_structures": 30,
+      "epochs": 100,
+      "best_epoch": 100,
+      "training_seconds": 128.1509861620143,
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.09046914793330103,
+        "BEC off-diagonal RMSE e": 0.05997382063113159,
+        "sum_error_max_abs_e": 2.398619154957276,
+        "sum_error_median_e": 0.9539813995361326
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.09042413120695128,
+        "BEC off-diagonal RMSE e": 0.060143096289528526,
+        "sum_error_max_abs_e": 2.3193377848486305,
+        "sum_error_median_e": 0.7652529001817279
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 2.3986191749572754,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 2.398619154957276
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.6409754753112793,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.6409754853112795
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.4475677013397217,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 1.447567691339723
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.6580412675393745,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.6580412575393744
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.9187740087509155,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 1.918773988750916
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5286860466003418,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.5286860466003418
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.768362283706665,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.7683623137066655
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7503814697265625,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.7503814897265628
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.1929337978363037,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 1.192933827836303
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7801243106368929,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.780124310636893
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 2.319337844848633,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 2.3193377848486305
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.562039852142334,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.5620398421423332
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5110621452331543,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.5110621252331526
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 2.294604778289795,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 2.294604788289796
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.6747257709503174,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.6747257809503191
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.0711954832077026,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 1.0711954932077021
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.9960346221923828,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.9960345921923826
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.1667962740175426,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 1.1667963140175424
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.9119281768798828,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.9119282068798826
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.8990633487701416,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 1.8990633187701396
+        }
+      ]
+    },
+    {
+      "mode": "bec32_50",
+      "training_structures": 50,
+      "epochs": 100,
+      "best_epoch": 99,
+      "training_seconds": 214.24927968205884,
+      "gpu": "NVIDIA A800 40GB Active",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.07600058649877542,
+        "BEC off-diagonal RMSE e": 0.051059742452923176,
+        "sum_error_max_abs_e": 1.4853311577114874,
+        "sum_error_median_e": 0.6364461629594412
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.07614423753781918,
+        "BEC off-diagonal RMSE e": 0.05168390896253347,
+        "sum_error_max_abs_e": 1.1163296799523938,
+        "sum_error_median_e": 0.6265717106058671
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.2520239353179932,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 1.2520239153179937
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.729337215423584,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.7293372254235841
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4738283692859113,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.47382835928591116
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.2738055717200041,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.2738055717200039
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.4853311777114868,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 1.4853311577114874
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7895886898040771,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.7895886698040777
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5935484170913696,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.5935484470913701
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5737995423842221,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.5737995423842219
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5745172500610352,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.5745172800610345
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.3997672237455845,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.3997672237455845
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6793439388275146,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.6793438788275123
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.38028526306152344,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.38028525306152483
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.49206018447875977,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.4920601644787581
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.1163296699523926,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 1.1163296799523938
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.9303749799728394,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.9303749299728394
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.49784672260284424,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.49784673260284373
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7433912754058838,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.7433912454058835
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8029160499572754,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.8029160499572745
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5532844066619873,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.5532844266619898
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7230968475341797,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.7230968875341799
+        }
+      ]
+    },
+    {
+      "mode": "bec32_50_e200",
+      "training_structures": 50,
+      "epochs": 200,
+      "best_epoch": 197,
+      "training_seconds": 396.4687370881438,
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.06568372749221515,
+        "BEC off-diagonal RMSE e": 0.04466269507590117,
+        "sum_error_max_abs_e": 1.176980982290039,
+        "sum_error_median_e": 0.49703657127105605
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.06579588040395044,
+        "BEC off-diagonal RMSE e": 0.0454668017340774,
+        "sum_error_max_abs_e": 0.8243677316119387,
+        "sum_error_median_e": 0.49703657127105605
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6652255058288574,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 0.665225485828858
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.40268802642822266,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.4026880164282227
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.3829951286315918,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.3829951386315922
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.14287154283374548,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.1428715528337456
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.176980972290039,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 1.176980982290039
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4989449977874756,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.4989449977874756
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.6772258281707764,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.6772258381707754
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6064232003409415,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.6064232003409411
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.21740417298860848,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.21740415298860857
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.49512815475463867,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.4951281447546365
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6662807464599609,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.6662807564599613
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.17302900273352861,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.17302898273352846
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4294312000274658,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.42943118002746417
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.23767941459664144,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 0.23767941459664146
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.6855058670043945,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.6855058170043946
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.39011229714378715,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.3901122671437873
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6140925884246826,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.6140925584246824
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6495144367218018,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.6495144367218009
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8243677616119385,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.8243677316119387
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.3027963596396148,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.30279634963961505
+        }
+      ]
+    },
+    {
+      "mode": "multitask32_flash_50",
+      "training_structures": 50,
+      "epochs": 100,
+      "best_epoch": 99,
+      "training_seconds": 150.1759527521208,
+      "gpu": "NVIDIA A800 40GB Active",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.0802578644959992,
+        "BEC off-diagonal RMSE e": 0.0499901727768439,
+        "sum_error_max_abs_e": 1.4033727445874038,
+        "sum_error_median_e": 0.5371447986866094
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.08123262181064081,
+        "BEC off-diagonal RMSE e": 0.050629369562360554,
+        "sum_error_max_abs_e": 0.8120872774395744,
+        "sum_error_median_e": 0.5108001728193666
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.2584445476531982,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 1.2584445276531988
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5259841680526733,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.5259841780526735
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.20389163843356073,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.2038916484335606
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4131351709365845,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.4131351809365855
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 1.4033727645874023,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 1.4033727445874038
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5822837352752686,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.582283735275267
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7976021766662598,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.7976022066662602
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8120872974395752,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.8120872774395744
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.8870043754577637,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.887004405457763
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.37606382369995117,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 0.37606382369994895
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5483054593205452,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.5483054193205451
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.3750956058502197,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.3750955958502189
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4463920593261719,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.4463920393261702
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.4521620273590088,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 0.45216203735901006
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.713767409324646,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.7137673593246461
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.40717220306396484,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.40717221306396434
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.973691463470459,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.9736914334704587
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7133359904401004,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.7133360304401002
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.49561619758605957,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.49561616758605975
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.28640993614681065,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.2864099261468109
+        }
+      ]
+    },
+    {
+      "mode": "multitask32_flash_50_e200",
+      "training_structures": 50,
+      "epochs": 200,
+      "best_epoch": 198,
+      "training_seconds": 272.3165201549418,
+      "gpu": "NVIDIA A100 80GB PCIe",
+      "Validation": {
+        "structures": 20,
+        "BEC diagonal RMSE e": 0.06637738696199892,
+        "BEC off-diagonal RMSE e": 0.043127670709705225,
+        "sum_error_max_abs_e": 1.301392585236818,
+        "sum_error_median_e": 0.5841747472354122
+      },
+      "common_Validation": {
+        "structures": 10,
+        "BEC diagonal RMSE e": 0.06715373958122323,
+        "BEC off-diagonal RMSE e": 0.04399475680523801,
+        "sum_error_max_abs_e": 1.301392585236818,
+        "sum_error_median_e": 0.6216328294073483
+      },
+      "frames": [
+        {
+          "source_id": 745,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5381591320037842,
+          "reference_sum_max_abs_e": 4.000000330961484e-08,
+          "sum_error_max_abs_e": 0.5381591120037847
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7157609462738037,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.7157609262738043
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4970371723175049,
+          "reference_sum_max_abs_e": 3.999999975690116e-08,
+          "sum_error_max_abs_e": 0.4970371823175035
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.4099491462111473,
+          "reference_sum_max_abs_e": 3.000000015074278e-08,
+          "sum_error_max_abs_e": 0.40994914621114714
+        },
+        {
+          "source_id": 7540,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.7200818061828613,
+          "reference_sum_max_abs_e": 2.000000032253979e-08,
+          "sum_error_max_abs_e": 0.7200817861828628
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5557054281234741,
+          "reference_sum_max_abs_e": 3.9999999867923464e-08,
+          "sum_error_max_abs_e": 0.5557054281234726
+        },
+        {
+          "source_id": 3369,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.9105548858642578,
+          "reference_sum_max_abs_e": 3.000000292630034e-08,
+          "sum_error_max_abs_e": 0.9105548958642569
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.7388603687286377,
+          "reference_sum_max_abs_e": 7.000000046275545e-08,
+          "sum_error_max_abs_e": 0.7388603487286369
+        },
+        {
+          "source_id": 6248,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6226565837860107,
+          "reference_sum_max_abs_e": 4.9999999474081847e-08,
+          "sum_error_max_abs_e": 0.6226565937860093
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.0510938167572021,
+          "reference_sum_max_abs_e": 4.000000008996807e-08,
+          "sum_error_max_abs_e": 1.0510938167572
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.6440308094024658,
+          "reference_sum_max_abs_e": 6.000000274397621e-08,
+          "sum_error_max_abs_e": 0.6440308194024662
+        },
+        {
+          "source_id": 4583,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.31587278842926025,
+          "reference_sum_max_abs_e": 2.999999981767587e-08,
+          "sum_error_max_abs_e": 0.3158727784292603
+        },
+        {
+          "source_id": 2845,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5069551467895508,
+          "reference_sum_max_abs_e": 4.9999999918171056e-08,
+          "sum_error_max_abs_e": 0.5069551467895512
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 1.3013925552368164,
+          "reference_sum_max_abs_e": 5.0000000306749115e-08,
+          "sum_error_max_abs_e": 1.301392585236818
+        },
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.5992348194122314,
+          "reference_sum_max_abs_e": 5.000000014021566e-08,
+          "sum_error_max_abs_e": 0.5992348394122304
+        },
+        {
+          "source_id": 2688,
+          "formula": "O32Zr16",
+          "raw_sum_max_abs_e": 0.3303879499435425,
+          "reference_sum_max_abs_e": 2.9999999928698173e-08,
+          "sum_error_max_abs_e": 0.330387939943543
+        },
+        {
+          "source_id": 7724,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5638549327850342,
+          "reference_sum_max_abs_e": 4.000000020099037e-08,
+          "sum_error_max_abs_e": 0.5638549327850315
+        },
+        {
+          "source_id": 9986,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5393447875976562,
+          "reference_sum_max_abs_e": 4.000000053405728e-08,
+          "sum_error_max_abs_e": 0.5393447875976554
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.5691146850585938,
+          "reference_sum_max_abs_e": 3.000000159403271e-08,
+          "sum_error_max_abs_e": 0.5691146550585939
+        },
+        {
+          "source_id": 3910,
+          "formula": "O64Zr32",
+          "raw_sum_max_abs_e": 0.9606480598449707,
+          "reference_sum_max_abs_e": 4.000000242143642e-08,
+          "sum_error_max_abs_e": 0.9606480498449703
+        }
+      ]
+    }
+  ]
+}

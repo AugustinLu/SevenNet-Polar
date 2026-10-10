@@ -22,7 +22,11 @@ import support  # noqa: E402
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--dataset', choices=['zro2', 'li3po4'], default='li3po4')
+    parser.add_argument(
+        '--dataset',
+        choices=['zro2', 'zro2_stoichiometric', 'li3po4'],
+        default='li3po4',
+    )
     parser.add_argument(
         '--sizes', nargs='+', type=int, default=[20, 30, 50, 100, 200]
     )
