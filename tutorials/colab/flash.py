@@ -1,18 +1,21 @@
 """Optional FlashTP build and equal-work checks on the current CUDA runtime."""
 
 import importlib
+import importlib.metadata
+import json
 import os
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import numpy as np
 import torch
 
 
-def install_flash(destination, revision):
+def install_flash(destination, revision, reuse=True):
     if not torch.cuda.is_available():
         raise RuntimeError(
             'FlashTP requires a CUDA GPU. Standard training remains available.'
@@ -29,6 +32,52 @@ def install_flash(destination, revision):
     major, minor = torch.cuda.get_device_capability()
     env['CUDA_ARCH_LIST'] = f'{major}{minor}'
     env['MAX_JOBS'] = '2'
+    # Rerunning a notebook can reuse its exact source revision in this runtime.
+    # Unverified installs are rebuilt; the numerical checks still run on reuse.
+    if reuse:
+        try:
+            dist = importlib.metadata.distribution('flashTP_e3nn')
+            url = json.loads(dist.read_text('direct_url.json'))['url']
+            parsed = urlparse(url)
+            installed_source = Path(unquote(parsed.path))
+            if parsed.scheme == 'file':
+                installed_revision = subprocess.check_output(
+                    ['git', '-C', str(installed_source), 'rev-parse', 'HEAD'],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                dirty = subprocess.check_output(
+                    ['git', '-C', str(installed_source), 'status', '--porcelain'],
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                import sevenn.nn.flash_helper as helper
+
+                importlib.reload(helper)
+                if (
+                    installed_revision == revision
+                    and not dirty
+                    and helper.is_flash_available()
+                ):
+                    log_path.write_text('Reused installed FlashTP at ' + revision)
+                    print("Reusing this runtime's verified FlashTP source revision.")
+                    return {
+                        'status': 'reused',
+                        'source_revision': revision,
+                        'runtime_cuda_arch': env['CUDA_ARCH_LIST'],
+                        'fetch_seconds': 0.0,
+                        'build_install_seconds': 0.0,
+                        'note': 'Existing build; original build time is excluded.',
+                    }
+        except (
+            OSError,
+            ValueError,
+            TypeError,
+            KeyError,
+            importlib.metadata.PackageNotFoundError,
+            subprocess.CalledProcessError,
+        ):
+            pass
     commands = [
         ['git', 'clone', 'https://github.com/SNU-ARC/flashTP.git', str(source)],
         ['git', '-C', str(source), 'checkout', '--detach', revision],
@@ -80,6 +129,7 @@ def install_flash(destination, revision):
     if not helper.is_flash_available():
         raise RuntimeError('FlashTP built but could not be imported on this GPU.')
     return {
+        'status': 'built',
         'source_revision': revision,
         'cuda_arch': env['CUDA_ARCH_LIST'],
         'max_jobs': 2,

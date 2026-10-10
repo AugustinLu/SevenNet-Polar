@@ -261,7 +261,11 @@ def make_config(
         'data': {
             'batch_size': batch_size,
             'preprocess_num_cores': 1,
-            'shift': 'per_atom_energy_mean',
+            'shift': (
+                'elemwise_reference_energies'
+                if multitask
+                else 'per_atom_energy_mean'
+            ),
             'scale': 1.0,
             'data_format': 'ase',
             'data_format_args': {'format': 'extxyz', 'index': ':'},
@@ -595,6 +599,10 @@ def export_artifacts(run_dir, data_dir, report):
             / 'example_inputs/training_polar/DATA.md'
         )
         z.write(attribution, 'data/ATTRIBUTION.md')
+        for name in ['installation.log', 'runtime-constraint.txt']:
+            path = run_dir.parent / name
+            if path.is_file():
+                z.write(path, name)
         for p in run_dir.rglob('*'):
             if (
                 p.is_file()
