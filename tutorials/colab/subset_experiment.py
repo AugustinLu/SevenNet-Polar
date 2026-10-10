@@ -31,6 +31,11 @@ def main():
     parser.add_argument('--layers', type=int, default=4)
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--multitask', action='store_true')
+    parser.add_argument(
+        '--flash',
+        action='store_true',
+        help='Use an installed FlashTP backend (CUDA, channels divisible by 32).',
+    )
     parser.add_argument('--bec-weight', type=float, default=1.0)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--output', type=Path, required=True)
@@ -44,6 +49,19 @@ def main():
     torch.set_num_threads(2)
     environment = support.environment(REPO)
     device = environment['device']
+    if args.flash:
+        from sevenn.nn.flash_helper import is_flash_available
+
+        if (
+            not args.multitask
+            or device != 'cuda'
+            or args.channels % 32
+            or not is_flash_available()
+        ):
+            parser.error(
+                'FlashTP needs --multitask, CUDA, its installed extension, '
+                'and channels divisible by 32.'
+            )
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     records = []
@@ -64,7 +82,20 @@ def main():
             seed=args.seed,
         )
         config['train']['bec_loss_weight'] = args.bec_weight
-        checkpoint, profile = support.train(REPO, run / 'training', config)
+        checkpoint, profile = support.train(
+            REPO, run / 'training', config, flash=args.flash
+        )
+        flash_report = {'requested': args.flash}
+        if args.flash:
+            import importlib.metadata
+            import flash
+
+            flash_report.update(
+                package_version=importlib.metadata.version('flashTP_e3nn'),
+                comparison=flash.compare_backends(
+                    checkpoint, paths['Train'], batch_size=args.batch_size
+                ),
+            )
         # Predict training and validation only. The fixed test labels never
         # enter model/configuration comparisons or checkpoint selection.
         comparison = run / 'train_validation.extxyz'
@@ -125,6 +156,7 @@ def main():
             'inference': inference,
             'validation_summary': row,
             'test_evaluated': False,
+            'flash': flash_report,
         }
         support.export_artifacts(run / 'training', run / 'data', report)
         records.append(row)
