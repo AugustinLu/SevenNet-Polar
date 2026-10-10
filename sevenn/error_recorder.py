@@ -1,3 +1,4 @@
+import math
 from copy import deepcopy
 from typing import (
     TYPE_CHECKING,
@@ -115,6 +116,33 @@ class AverageNumber:
         return self._sum / self._count
 
 
+class MaximumNumber:
+    """An epoch maximum, including a maximum reduction across DDP ranks."""
+
+    def __init__(self):
+        self._max = float('-inf')
+        self._count = 0
+
+    def update(self, values: torch.Tensor) -> None:
+        if values.numel() == 0:
+            return
+        value = values.max().item()
+        if math.isnan(value) or value > self._max:
+            self._max = value
+        self._count += values.numel()
+
+    def _ddp_reduce(self, device):
+        maximum = torch.tensor(self._max, device=device, dtype=torch.float64)
+        count = torch.tensor(self._count, device=device)
+        dist.all_reduce(maximum, op=dist.ReduceOp.MAX)
+        dist.all_reduce(count, op=dist.ReduceOp.SUM)
+        self._max = maximum.item()
+        self._count = count.item()
+
+    def get(self) -> float:
+        return self._max if self._count else torch.nan
+
+
 class ErrorMetric:
     """
     Base class for error metrics We always average error by # of structures,
@@ -152,8 +180,8 @@ class ErrorMetric:
 
     def _get_cartesian_tensor(self) -> Any:
         if getattr(self, '_ct', None) is None:
-            import e3nn.io
             from e3nn.io import CartesianTensor
+
             if self.is_bec:
                 self._ct = CartesianTensor('ij')
             elif self.is_dielectric:
@@ -221,6 +249,48 @@ class ErrorMetric:
 
     def __str__(self):
         return f'{self.key_str()}: {self.value.get():.6f}'
+
+
+class BECASRMeanError(ErrorMetric):
+    """Mean over structures of max_ab |sum_i Z*_{i,ab}|, without projection.
+
+    Each structure has its own atom sum; batches must never be summed together.
+    This is the raw predicted sum, not the error relative to a reference sum.
+    In training, structures are evaluated at successive optimizer states.
+    Validation evaluates every structure using the same model state.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if not self.is_bec or self.per_atom:
+            raise ValueError('ASR metrics require BornEffectiveCharges.')
+        self.reset()
+
+    def update(self, output: 'AtomGraphData') -> None:
+        ct, rtp = self._get_cartesian_tensor()
+        prediction = output[self.pred_key]
+        cartesian = ct.to_cartesian(
+            prediction, rtp.to(device=prediction.device, dtype=prediction.dtype)
+        )
+        counts = output[KEY.NUM_ATOMS].reshape(-1).tolist()
+        if not counts:
+            return
+        if any(n <= 0 or int(n) != n for n in counts):
+            raise ValueError('ASR metrics require positive integer atom counts.')
+        tensors = torch.split(
+            cartesian.to(torch.float64), [int(n) for n in counts], dim=0
+        )
+        residuals = torch.stack(
+            [tensor.sum(dim=0).abs().max() for tensor in tensors]
+        )
+        self.value.update(residuals * self.coeff)
+
+
+class BECASRMaxError(BECASRMeanError):
+    """Largest raw structure ASR residual in an epoch, in elementary charges."""
+
+    def reset(self) -> None:
+        self.value = MaximumNumber()
 
 
 class BECDiagRMSError(ErrorMetric):
@@ -436,6 +506,8 @@ class ErrorRecorder:
         'Loss': LossError,
         'DiagRMSE': BECDiagRMSError,
         'OffDiagRMSE': BECOffDiagRMSError,
+        'ASRMean': BECASRMeanError,
+        'ASRMax': BECASRMaxError,
     }
 
     def __init__(self, metrics: List[ErrorMetric]) -> None:

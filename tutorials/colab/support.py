@@ -207,6 +207,99 @@ def prepare_data(repo, destination, seed=42):
     return structures, paths, all_path.resolve(), manifest, summary
 
 
+def prepare_subset_data(repo, destination, training_structures, dataset='zro2'):
+    """Use a nested tutorial pool with fixed validation/test structures.
+
+    Pool membership was sampled by composition, without inspecting labels.
+    Original dataset frame IDs and checksums remain in the exported manifest.
+    """
+    directory = repo / 'example_inputs/tutorial_polar' / dataset
+    source = directory / 'pool.extxyz'
+    selection = json.loads((directory / 'manifest.json').read_text())
+    if (
+        isinstance(training_structures, bool)
+        or not isinstance(training_structures, int)
+        or not 1 <= training_structures <= len(selection['pool_indices']['Train'])
+    ):
+        raise ValueError('Training count must be an integer within the saved pool.')
+    source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+    if source_hash != selection['pool_sha256']:
+        raise ValueError(
+            'Tutorial pool checksum changed; revalidate its provenance.'
+        )
+    pool = read(source, ':', format='extxyz')
+    if len(pool) != len(selection['pool_order']) or len(pool) > 240:
+        raise ValueError('Expected a bounded tutorial pool of at most 240 frames.')
+    pool_indices = {
+        'Train': selection['pool_indices']['Train'][:training_structures],
+        'Validation': selection['pool_indices']['Validation'],
+        'Test': selection['pool_indices']['Test'],
+    }
+    chosen = sum(pool_indices.values(), [])
+    if len(chosen) != len(set(chosen)):
+        raise ValueError('Tutorial partitions overlap.')
+    structures = [pool[i] for i in chosen]
+    fingerprints = [geometry_fingerprint(a) for a in structures]
+    if len(set(fingerprints)) != len(fingerprints):
+        raise ValueError('Duplicate geometries cross the tutorial partitions.')
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=False)
+    indices = {}
+    paths = {}
+    offset = 0
+    for name, ids in pool_indices.items():
+        indices[name] = list(range(offset, offset + len(ids)))
+        offset += len(ids)
+        path = destination / f'{name.lower()}.extxyz'
+        originals = [pool[i] for i in ids]
+        write(path, [training_copy(a) for a in originals], format='extxyz')
+        for original, restored in zip(originals, read(path, ':', format='extxyz')):
+            np.testing.assert_allclose(
+                reference_bec(original), reference_bec(restored), atol=1e-8
+            )
+            np.testing.assert_allclose(
+                original.get_forces(), restored.get_forces(), atol=1e-8
+            )
+            np.testing.assert_allclose(
+                original.get_stress(), restored.get_stress(), atol=1e-8
+            )
+            np.testing.assert_allclose(
+                original.get_potential_energy(),
+                restored.get_potential_energy(),
+                atol=1e-8,
+            )
+        paths[name] = path.resolve()
+    all_path = destination / 'all.extxyz'
+    write(all_path, [training_copy(a) for a in structures], format='extxyz')
+    manifest = {
+        'dataset': dataset,
+        'source_sha256': source_hash,
+        'original_source': selection['source'],
+        'selection_seed': selection['selection_seed'],
+        'source_ids': {
+            name: [selection['pool_order'][i] for i in ids]
+            for name, ids in pool_indices.items()
+        },
+        'indices': indices,
+        'geometry_fingerprints': fingerprints,
+        'split_policy': selection['split_policy'],
+    }
+    (destination / 'split.json').write_text(json.dumps(manifest, indent=2))
+    summary = pd.DataFrame(
+        [
+            {
+                'partition': name,
+                'structures': len(ids),
+                'compositions': dict(
+                    Counter(structures[i].get_chemical_formula() for i in ids)
+                ),
+            }
+            for name, ids in indices.items()
+        ]
+    )
+    return structures, paths, all_path.resolve(), manifest, summary
+
+
 def make_config(
     paths,
     epochs,
@@ -216,6 +309,7 @@ def make_config(
     layers=3,
     device='cpu',
     seed=42,
+    monitor_asr=False,
 ):
     if min(epochs, batch_size, channel, layers) < 1:
         raise ValueError(
@@ -226,6 +320,11 @@ def make_config(
         ['BornEffectiveCharges', 'OffDiagRMSE'],
         ['TotalLoss', 'None'],
     ]
+    if monitor_asr:
+        errors[2:2] = [
+            ['BornEffectiveCharges', 'ASRMean'],
+            ['BornEffectiveCharges', 'ASRMax'],
+        ]
     if multitask:
         errors = [['Energy', 'RMSE'], ['Force', 'RMSE'], ['Stress', 'RMSE']] + errors
     return {
@@ -494,10 +593,10 @@ def metrics_and_parity(atoms, graphs, manifest, run_dir, multitask=False):
     return metrics, fig
 
 
-def asr_diagnostics(atoms, manifest, run_dir):
+def asr_diagnostics(atoms, manifest, run_dir, structures=None):
     records = []
     for partition, ids in manifest['indices'].items():
-        for i in ids:
+        for position, i in enumerate(ids):
             rows = atoms[atoms.stct_id == i]
             ref = (
                 rows[[f'born_effective_charges_{c}' for c in COMPONENTS]]
@@ -513,16 +612,27 @@ def asr_diagnostics(atoms, manifest, run_dir):
                 {
                     'partition': partition,
                     'structure_id': i,
+                    'natoms': len(rows),
                     'reference_max_abs_sum_e': float(np.abs(ref.sum(0)).max()),
                     'prediction_max_abs_sum_e': float(np.abs(pred.sum(0)).max()),
+                    'prediction_max_abs_mean_e': float(
+                        np.abs(pred.sum(0)).max() / len(rows)
+                    ),
+                    'sum_error_max_abs_e': float(np.abs((pred - ref).sum(0)).max()),
                 }
             )
+            if structures is not None:
+                records[-1]['formula'] = structures[i].get_chemical_formula()
+            if 'source_ids' in manifest:
+                records[-1]['source_id'] = manifest['source_ids'][partition][
+                    position
+                ]
     frame = pd.DataFrame(records)
     frame.to_csv(run_dir / 'asr.csv', index=False)
     return frame
 
 
-def learning_curves(run_dir, multitask=False):
+def learning_curves(run_dir, multitask=False, structures=None, manifest=None):
     import matplotlib.pyplot as plt
 
     curve = pd.read_csv(run_dir / 'lc.csv')
@@ -537,10 +647,18 @@ def learning_curves(run_dir, multitask=False):
             ('Stress_RMSE', 'Stress', 'GPa'),
             ('TotalLoss', 'Weighted loss', 'weighted units'),
         ]
+    has_asr = 'validset_BornEffectiveCharges_ASRMax' in curve
+    if has_asr:
+        targets += [
+            ('BornEffectiveCharges_ASRMax', 'Raw ASR maximum', 'e / cell'),
+            ('BornEffectiveCharges_ASRMean', 'Raw ASR mean', 'e / cell'),
+        ]
+    columns = 3 if multitask else 2
+    rows = (len(targets) + columns - 1) // columns
     fig, axes = plt.subplots(
-        1 if not multitask else 2,
-        2 if not multitask else 3,
-        figsize=(11, 4) if not multitask else (14, 8),
+        rows,
+        columns,
+        figsize=(11 if not multitask else 14, 4 * rows),
         constrained_layout=True,
     )
     for ax, (suffix, title, unit) in zip(axes.flat, targets):
@@ -566,8 +684,34 @@ def learning_curves(run_dir, multitask=False):
                 color=COLORS[partition],
             )
         ax.set(title=title, xlabel='Epoch', ylabel=unit)
+        if suffix in ('BornEffectiveCharges_ASRMax', 'BornEffectiveCharges_ASRMean'):
+            # Show both the large initial bias and late convergence, including
+            # zero reference sums; the central linear region is +/-0.01 e.
+            ax.set_yscale('symlog', linthresh=0.01)
+        if (
+            suffix in ('BornEffectiveCharges_ASRMax', 'BornEffectiveCharges_ASRMean')
+            and structures is not None
+            and manifest is not None
+        ):
+            reference_sums = [
+                np.abs(reference_bec(structures[i]).sum(axis=0)).max()
+                for i in manifest['indices']['Validation']
+            ]
+            baseline = (
+                max(reference_sums)
+                if suffix.endswith('ASRMax')
+                else np.mean(reference_sums)
+            )
+            ax.axhline(
+                baseline,
+                color='#333333',
+                linestyle=':',
+                label='Validation reference',
+            )
         ax.grid(alpha=0.2)
         ax.legend(frameon=False)
+    for ax in list(axes.flat)[len(targets) :]:
+        ax.axis('off')
     fig.savefig(run_dir / 'convergence.png', dpi=160)
     return curve, fig
 
@@ -594,9 +738,14 @@ def export_artifacts(run_dir, data_dir, report):
     (run_dir / 'report.json').write_text(json.dumps(report, indent=2))
     archive = run_dir.parent / (run_dir.name + '.zip')
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+        data_source = (
+            'tutorial_polar' if 'dataset' in report['split'] else 'training_polar'
+        )
         attribution = (
             Path(__file__).resolve().parents[2]
-            / 'example_inputs/training_polar/DATA.md'
+            / 'example_inputs'
+            / data_source
+            / 'DATA.md'
         )
         z.write(attribution, 'data/ATTRIBUTION.md')
         for name in ['installation.log', 'runtime-constraint.txt']:

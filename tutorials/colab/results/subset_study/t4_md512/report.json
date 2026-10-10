@@ -1,0 +1,62 @@
+{
+  "atoms": 512,
+  "steps": 100,
+  "timestep_fs": 0.25,
+  "duration_fs": 25.0,
+  "temperature_K": 100.0,
+  "field_V_per_A": [
+    0.0,
+    0.0,
+    0.001
+  ],
+  "deploy_seconds": 11.063978743999996,
+  "lammps_process_seconds": 34.579094136000094,
+  "zero_field_check_seconds": 1.87018043199987,
+  "md_loop_seconds": 32.3926,
+  "seconds_per_step": 0.323926,
+  "initial_force_max_abs_difference_eV_per_A": {
+    "zero": 4.5062576293997125e-05,
+    "field": 4.364644367249593e-05
+  },
+  "max_force_eV_per_A": 3.0591088448801553,
+  "finite_frames": 11,
+  "final_temperature_K": 203.8772201439187,
+  "binary_sha256": "ef2413e165d4f7ef0db21f91df3eec44209745e7c46ba5406f7f66db37cb8588",
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "packages": {
+      "sevenn": "0.12.2.dev0",
+      "torch": "2.11.0+cu130",
+      "e3nn": "0.6.0",
+      "ase": "3.29.0",
+      "numpy": "2.1.3",
+      "matscipy": "1.3.0",
+      "torch-geometric": "2.8.0.post1",
+      "matplotlib": "3.10.0"
+    },
+    "source_commit": "ec7465e719a72714932ee1f7c549ebd41cef1801",
+    "source_dirty": false,
+    "sevenn_origin": "source checkout/sevenn/__init__.py",
+    "torch_cuda_build": "13.0",
+    "device": "cuda",
+    "precision": "float32 (no autocast)",
+    "gpu": "Tesla T4",
+    "capability": [
+      7,
+      5
+    ],
+    "gpu_memory_bytes": 15637086208,
+    "cuda_compiler": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx_compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "note": "Short workflow demonstration; no claim of long-time stability. Energy/pressure are the zero-field model quantities. Field forces use the documented pair-style defaults.",
+  "build": {
+    "lammps_ref": "stable_2Aug2023_update3",
+    "source_commit": "46265e36ce79e4b42c9e5229b72a0ce2485845cd",
+    "build_seconds": 612.8282194979997,
+    "jobs": 2,
+    "torch_version": "2.11.0+cu130"
+  },
+  "helper_sha256": "88f4dbbc877da57c5f84a1ca07e59ab45ea75c6efe845151849184d58a2c2cf3"
+}

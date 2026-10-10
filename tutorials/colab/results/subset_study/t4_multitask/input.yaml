@@ -1,0 +1,58 @@
+model:
+  chemical_species: auto
+  cutoff: 6.0
+  channel: 32
+  lmax: 2
+  num_convolution_layer: 4
+  is_parity: false
+train:
+  random_seed: 42
+  num_workers: 0
+  device: cuda
+  epoch: 100
+  per_epoch: 25
+  best_metric: TotalLoss
+  is_train_bec: true
+  is_train_stress: true
+  is_train_dielectric: false
+  energy_loss_weight: 1.0
+  force_loss_weight: 0.3
+  stress_loss_weight: 1.0e-05
+  bec_loss_weight: 1.0
+  loss: mse
+  optimizer: adam
+  optim_param:
+    lr: 0.005
+  scheduler: exponentiallr
+  scheduler_param:
+    gamma: 0.992
+  error_record:
+  - - Energy
+    - RMSE
+  - - Force
+    - RMSE
+  - - Stress
+    - RMSE
+  - - BornEffectiveCharges
+    - DiagRMSE
+  - - BornEffectiveCharges
+    - OffDiagRMSE
+  - - BornEffectiveCharges
+    - ASRMean
+  - - BornEffectiveCharges
+    - ASRMax
+  - - TotalLoss
+    - None
+data:
+  batch_size: 4
+  preprocess_num_cores: 1
+  shift: elemwise_reference_energies
+  scale: 1.0
+  data_format: ase
+  data_format_args:
+    format: extxyz
+    index: ':'
+  load_trainset_path:
+  - /content/polar-tutorial-b74f57bb/data/train.extxyz
+  load_validset_path:
+  - /content/polar-tutorial-b74f57bb/data/validation.extxyz
