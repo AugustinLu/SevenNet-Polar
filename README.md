@@ -34,7 +34,7 @@ and download the checkpoint and results:
 | [BEC quickstart](tutorials/colab/01_bec_quickstart.ipynb) | CPU / free T4; no FlashTP required | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/01_bec_quickstart.ipynb) |
 | [Multitask energy/force/stress/BEC](tutorials/colab/02_multitask_a100_flashtp.ipynb) | A100 when available; optional FlashTP checks and timings | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) |
 
-These preview tutorials exclude dielectric training. See the
+These tutorials exclude dielectric training. See the
 [tutorial guide](tutorials/colab/README.md) for usage, data attribution,
 split limitations, troubleshooting, and measured validation coverage.
 

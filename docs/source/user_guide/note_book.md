@@ -13,8 +13,7 @@ They exclude dielectric prediction.
 | [Multitask E/F/S/BEC](https://github.com/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) | [![Open in Google Colab]](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) | A100 when available, optional FlashTP |
 
 See the [Polar tutorial guide](https://github.com/AugustinLu/SevenNet-Polar/tree/main/tutorials/colab)
-for validation records, dataset attribution, and split limitations. These are
-preview links to the tutorials branch.
+for validation records, dataset attribution, and split limitations.
 
 ## Upstream SevenNet notebooks
 
