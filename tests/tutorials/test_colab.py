@@ -18,7 +18,11 @@ spec.loader.exec_module(support)
 
 def test_notebooks_are_valid_and_compile():
     nbformat = pytest.importorskip('nbformat')
-    paths = sorted((ROOT / 'tutorials/colab').glob('*.ipynb'))
+    paths = sorted(
+        p
+        for p in (ROOT / 'tutorials/colab').glob('*.ipynb')
+        if not p.name.endswith('_output.ipynb')
+    )
     assert len(paths) == 2
     for path in paths:
         nb = nbformat.read(path, as_version=4)
