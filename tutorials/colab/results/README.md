@@ -28,3 +28,8 @@ whitespace removed; original logs remain in the development archives. Timings ar
 Training/validation/test metrics come from the best validation checkpoint;
 epoch training metrics accumulate predictions while model weights change.
 No synthetic DFT labels or predictions are used. Raw ASR diagnostics are retained.
+
+`stoichiometric_zro2` records the oxygen-vacancy exclusion study: matched
+validation-frame comparisons, bounded size/epoch/channel trials, installed
+FlashTP multitask checks and the completed standard T4 budget check. See
+[the restricted ZrO₂ study](../STOICHIOMETRIC_ZRO2.md).

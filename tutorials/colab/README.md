@@ -67,7 +67,7 @@ The introductory notebook flow focuses on RMSE, parity and checkpoint reuse. The
 
 ## Stoichiometric ZrO₂ alternative
 
-The [restricted ZrO₂ study](STOICHIOMETRIC_ZRO2.md) tests 48/96-atom cells with oxygen-vacancy frames excluded. To try it, choose `DATASET='zro2_stoichiometric'`, 50 training structures, 32 channels and 100 epochs. Its fixed 20/20 holdouts and official labels are preserved. The existing Li₃PO₄ defaults remain available; the optional MD example uses Li₃PO₄.
+The [restricted ZrO₂ study](STOICHIOMETRIC_ZRO2.md) tests 48/96-atom cells with oxygen-vacancy frames excluded. To try it, choose `DATASET='zro2_stoichiometric'`, 50 training structures, 32 channels and 100 epochs. Its fixed 20/20 holdouts and official labels are preserved; standard T4 training took 11.5 minutes in the validation run. The existing Li₃PO₄ defaults remain available; the optional MD example uses Li₃PO₄.
 
 ## Reproduce the bounded subset comparison
 
