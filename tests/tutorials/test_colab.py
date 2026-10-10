@@ -1,6 +1,6 @@
 """Integrity and scientific plumbing for the BEC tutorials."""
+
 import importlib.util
-import json
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +9,9 @@ import pytest
 from ase.io import read
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('polar_tutorial_support', ROOT / 'tutorials/colab/support.py')
+spec = importlib.util.spec_from_file_location(
+    'polar_tutorial_support', ROOT / 'tutorials/colab/support.py'
+)
 support = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(support)
 
@@ -40,6 +42,7 @@ def test_split_roundtrip_and_config(tmp_path):
             assert 'dielectric_tensor' not in atoms.calc.results
     from sevenn.parse_input import read_config_yaml
     import yaml
+
     for multi in [False, True]:
         config = support.make_config(paths, 1, multitask=multi)
         assert 'load_testset_path' not in config['data']
@@ -47,20 +50,29 @@ def test_split_roundtrip_and_config(tmp_path):
         path.write_text(yaml.safe_dump(config))
         model, train, data = read_config_yaml(str(path))
         assert train['is_train_bec'] and not train['is_train_dielectric']
-        assert train['force_loss_weight'] == (0.3 if multi else 0.)
+        assert train['force_loss_weight'] == (0.3 if multi else 0.0)
 
 
 def test_fingerprint_is_invariant():
     atoms = read(ROOT / 'example_inputs/training_polar/data.xyz', index=0)
     shifted = atoms[::-1]
-    shifted.translate([.33, -.21, .11])
-    assert support.geometry_fingerprint(atoms) == support.geometry_fingerprint(shifted)
+    shifted.translate([0.33, -0.21, 0.11])
+    assert support.geometry_fingerprint(atoms) == support.geometry_fingerprint(
+        shifted
+    )
 
 
 def test_stress_conversion_and_bec_order():
     atoms = pd.DataFrame({'stct_id': [0]})
-    graphs = pd.DataFrame({f'{prefix}_{c}': [value] for prefix in ['stress', 'inferred_stress']
-                           for c, value in zip(['xx', 'yy', 'zz', 'xy', 'yz', 'zx'], [10, 20, 30, 40, 50, 60])})
+    graphs = pd.DataFrame(
+        {
+            f'{prefix}_{c}': [value]
+            for prefix in ['stress', 'inferred_stress']
+            for c, value in zip(
+                ['xx', 'yy', 'zz', 'xy', 'yz', 'zx'], [10, 20, 30, 40, 50, 60]
+            )
+        }
+    )
     ref, pred, unit = support.paired_values(atoms, graphs, 'Stress', [0])
     np.testing.assert_allclose(ref, [-1, -2, -3, -4, -5, -6])
     assert unit == 'GPa'
@@ -75,21 +87,30 @@ def test_stress_conversion_and_bec_order():
 @pytest.mark.parametrize('multitask', [False, True])
 def test_cpu_train_reload_and_evaluate(tmp_path, multitask):
     # One actual epoch through the production CLI, no synthetic labels.
-    structures, paths, all_path, manifest, _ = support.prepare_data(ROOT, tmp_path / 'data')
+    structures, paths, all_path, manifest, _ = support.prepare_data(
+        ROOT, tmp_path / 'data'
+    )
     config = support.make_config(paths, 1, multitask=multitask, channel=4, layers=2)
     checkpoint, profile = support.train(ROOT, tmp_path / 'run', config)
-    atoms, graphs, inference_profile = support.evaluate(ROOT, tmp_path / 'run', checkpoint, all_path, 'cpu')
+    atoms, graphs, inference_profile = support.evaluate(
+        ROOT, tmp_path / 'run', checkpoint, all_path, 'cpu'
+    )
     assert len(graphs) == 30 and len(atoms) == sum(map(len, structures))
     i = manifest['indices']['Test'][0]
     support.reload_ase(checkpoint, structures[i], 'cpu', atoms, i)
-    metrics, fig = support.metrics_and_parity(atoms, graphs, manifest, tmp_path / 'run', multitask=multitask)
+    metrics, fig = support.metrics_and_parity(
+        atoms, graphs, manifest, tmp_path / 'run', multitask=multitask
+    )
     assert np.isfinite(metrics.RMSE).all()
     # Verify DFT stress references against ASE, not merely the conversion code.
     if multitask:
         reference, _, _ = support.paired_values(atoms, graphs, 'Stress', [i])
         stress = structures[i].get_stress()
-        np.testing.assert_allclose(reference, stress[[0, 1, 2, 5, 3, 4]] * 160.21766208, rtol=1e-6)
+        np.testing.assert_allclose(
+            reference, stress[[0, 1, 2, 5, 3, 4]] * 160.21766208, rtol=1e-6
+        )
     assert profile['peak_cuda_allocated_bytes'] is None
     assert inference_profile['cli_seconds'] > 0
     import matplotlib.pyplot as plt
+
     plt.close(fig)

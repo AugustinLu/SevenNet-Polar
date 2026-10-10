@@ -3,6 +3,7 @@
 Usage: python execute_notebook.py NOTEBOOK --output OUTPUT [--epochs 1] [--skip-install]
 Requires nbformat, nbclient, ipykernel. Outputs go outside the source notebook.
 """
+
 import argparse
 import json
 import os
@@ -31,7 +32,9 @@ def main():
     env = os.environ.copy()
     env['SEVENNET_TUTORIAL_REPO'] = str(repo)
     env['SEVENNET_TUTORIAL_FLASH'] = args.flash
-    env['OMP_NUM_THREADS'] = env['MKL_NUM_THREADS'] = env['SEVENNET_TUTORIAL_THREADS'] = '2'
+    env['OMP_NUM_THREADS'] = env['MKL_NUM_THREADS'] = env[
+        'SEVENNET_TUTORIAL_THREADS'
+    ] = '2'
     env['MPLBACKEND'] = 'Agg'
     if args.epochs:
         env['SEVENNET_TUTORIAL_EPOCHS'] = str(args.epochs)
@@ -41,10 +44,31 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         kernel = Path(directory) / 'polar-tutorial'
         kernel.mkdir()
-        (kernel / 'kernel.json').write_text(json.dumps({'argv': [sys.executable, '-m', 'ipykernel_launcher', '-f', '{connection_file}'],
-                                                       'display_name': 'Polar tutorial test', 'language': 'python'}))
-        manager = KernelManager(kernel_name='polar-tutorial', kernel_spec_manager=KernelSpecManager(kernel_dirs=[directory]))
-        client = NotebookClient(notebook, km=manager, timeout=3600, resources={'metadata': {'path': str(output.parent)}})
+        (kernel / 'kernel.json').write_text(
+            json.dumps(
+                {
+                    'argv': [
+                        sys.executable,
+                        '-m',
+                        'ipykernel_launcher',
+                        '-f',
+                        '{connection_file}',
+                    ],
+                    'display_name': 'Polar tutorial test',
+                    'language': 'python',
+                }
+            )
+        )
+        manager = KernelManager(
+            kernel_name='polar-tutorial',
+            kernel_spec_manager=KernelSpecManager(kernel_dirs=[directory]),
+        )
+        client = NotebookClient(
+            notebook,
+            km=manager,
+            timeout=3600,
+            resources={'metadata': {'path': str(output.parent)}},
+        )
         try:
             client.execute(env=env)
         finally:
