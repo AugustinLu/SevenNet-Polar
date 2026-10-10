@@ -1,153 +1,62 @@
 # Measured tutorial validation
 
-The notebooks now use the bounded Li₃PO₄ 50/20/20 split, four layers, batch size 4 and 100 epochs. See [the dataset/configuration study](SUBSET_STUDY.md) for all size comparisons and [compact evidence](results/subset_study). The older measurements below describe the previous 30-frame ZrO₂ defaults and should not be applied to the revised notebooks.
+## Revised 50/20/20 Li₃PO₄ notebooks
 
-Final Colab end-to-end measurements are being recorded for this revision; they will be added here after execution and artifact checks.
+Real end-to-end Colab runs completed on October 11, 2026 (Japan time), with 50 training, 20 validation and 20 test structures, lmax=2, four layers, batch size 4 and 100 epochs. The quickstart uses 16 channels and BEC-only loss; multitask uses 32 channels on CUDA and E/F/S/BEC loss. These are single-run measurements, with two CPU threads and float32 throughout.
 
-# Historical validation: original 30-frame ZrO₂ tutorials
+| Notebook / Colab GPU | Training subprocess wall time | Separate CLI inference | Setup to first parity | Test BEC diagonal / off-diagonal RMSE (e) |
+|---|---:|---:|---:|---:|
+| BEC quickstart / T4 | 356.1 s (5.9 min) | 17.0 s | 410.9 s | 0.04228 / 0.02943 |
+| Multitask / T4 | 492.2 s (8.2 min) | 17.0 s | 543.2 s | 0.05881 / 0.04077 |
+| Multitask / A100-SXM4-40GB | 257.0 s (4.3 min) | 13.0 s | 295.5 s | 0.05881 / 0.04077 |
 
-Executed on 2026-10-10, developed on `tutorials/colab-bec`. The source notebooks
-contain no outputs. Compact machine-readable records, learning curves, metrics,
-ASR diagnostics and selected figures are in [results](results/README.md).
-Full executed notebooks and checkpoint ZIPs were also saved during development.
+Training includes process startup, preprocessing, model construction, optimization and checkpoint writing. Runtime allocation and optional compilation are excluded. Installation took 15.9 / 13.0 / 8.3 s in table order. PyTorch training peaks were 1.38 / 2.45 / 2.45 GiB allocated, and 2.38 / 4.72 / 4.72 GiB reserved, respectively; these are process peaks, not total device memory.
 
-## End-to-end runs
+The recorded runs include developer tensor-sum monitoring, which has subsequently been disabled in the introductory notebooks. Training data, objective and model settings are unchanged. Exact measured commits and configurations remain in each report; the final simplified notebook flow is separately checked by one-epoch CPU execution (both completed with zero cell errors). No timing is presented as a rerun of a later source revision.
 
-Both notebooks completed at their default epoch counts, including real training,
-best-validation checkpoint selection, CLI inference, parity plots, ASE reload
-agreement, ASR diagnostics and artifact export. Saved executed notebooks were
-checked for error outputs. The final A100 run also completed every optional
-FlashTP check. Runtime allocation is excluded from all times below.
+Multitask test component RMSE on T4 was **0.04448 eV/atom energy, 0.27540 eV/Å force and 0.77930 GPa stress**. A100 and T4 held-out results agree within 2×10⁻⁶ in the reported units. CLI predictions agree with independent ASE checkpoint reloading. Stress references are checked against ASE's tensile-positive convention; force/stress learning curves convert CLI norm RMSE to component RMSE. Both notebooks train genuine labels and export partition-specific parity plots.
 
-| Notebook / device | Channels / epochs | Training wall time | Reloaded CLI inference | Setup to first parity | Test BEC diagonal / off-diagonal RMSE (e) |
-|---|---:|---:|---:|---:|---:|
-| Quickstart / Apple M5 Pro CPU | 16 / 20 | 150.6 s | 9.0 s | 162.0 s | 0.1103 / 0.0800 |
-| Quickstart / Colab T4 | 16 / 20 | 73.0 s | 13.0 s | 114.6 s | 0.1103 / 0.0800 |
-| Multitask / Apple M5 Pro CPU | 16 / 40 | 262.6 s | 8.0 s | 273.8 s | 0.0932 / 0.0685 |
-| Multitask / Colab A100-SXM4-40GB | 32 / 40 | 110.0 s | 12.0 s | 144.3 s | 0.1013 / 0.0699 |
+The bounded official dataset pools, checksums, composition-balanced whole-structure splits and serialization checks are documented in [DATA.md](../../example_inputs/tutorial_polar/DATA.md). The data lack trajectory/parent IDs: these metrics demonstrate training and evaluation, and do not establish independent scientific generalization. Configuration selection used validation only. Neither notebook trains dielectric response, and the BEC-only model's forces are untrained.
 
-CPU setup used the installed environment (`--skip-install`); GPU runs fetched the
-public branch and installed the fork. CPU/A100 multitask models have different
-channel counts, so these rows are not an accelerator speedup comparison.
-Training wall time includes CLI startup, preprocessing, construction, optimization
-and checkpoint writing. Inference includes a separate CLI process and reload.
+Compact records are in [t4_quickstart](results/subset_study/t4_quickstart), [t4_multitask](results/subset_study/t4_multitask) and [a100_multitask](results/subset_study/a100_multitask). Full executed notebooks, checkpoints and ZIP exports were retrieved and checked for cell errors and archive integrity. Colab used Python 3.13.15, PyTorch 2.11.0+cu130, CUDA toolkit 13.0.88, e3nn 0.6.0 and ASE 3.29.0; reports retain the complete environment.
 
-The T4 checkout fetch/install took **3.6 / 12.8 s**; final A100 **3.4 / 8.2 s**.
-The supplied PyTorch wheel was retained. Quickstart T4 training peaked at
-**0.402 GiB allocated / 0.502 GiB reserved**; A100 32-channel standard multitask
-training at **0.704 / 1.473 GiB**. These are PyTorch process peaks, not total GPU
-memory or notebook-session memory.
+## Optional FlashTP on A100
 
-Colab tested **Python 3.13.15, PyTorch 2.11.0+cu130, CUDA toolkit 13.0.88,
-e3nn 0.6.0, ASE 3.29.0, numpy 2.1.3, matscipy 1.3.0,
-torch-geometric 2.8.0.post1, matplotlib 3.10.0**, T4 `sm_75` and A100 `sm_80`.
-CPU tested Python 3.10.20, PyTorch 2.5.1, e3nn 0.6.0 and ASE 3.28.0.
-All training used float32, batch size 1 and two CPU threads. Each report records
-its own full dependency versions, configuration, source commit and data hash.
+A fresh pinned **d52e41454afc9636cd51757b65df44e7bcdca178** build took **503.1 s**, excluding its 2.0 s fetch, with two compiler jobs. The 32-channel, four-layer, batch-four multitask checkpoint passed E/F/S/BEC output, weighted-loss and all **29 parameter-gradient** comparisons. Maximum output differences were 3.05×10⁻⁵ eV energy, 3.81×10⁻⁶ eV/Å force, 2.98×10⁻⁸ in the internal stress units, and 9.54×10⁻⁷ for raw BEC irreps. Maximum parameter-gradient difference was 9.72×10⁻⁷. Output tolerance was 10⁻⁴ and gradient tolerance 5×10⁻⁴.
 
-## Accuracy and physical limits
-
-| Multitask held-out component RMSE | CPU, 16 channels | A100, 32 channels |
+| Same A100 checkpoint and batch | Standard e3nn | FlashTP |
 |---|---:|---:|
-| Energy (eV/atom) | 0.0321 | 0.0283 |
-| Force (eV/Å) | 0.2864 | 0.2897 |
-| Stress (GPa) | 2.6630 | 2.6064 |
+| Median E/F/S/BEC forward | 55.94 ms | 34.96 ms |
+| Median forward + backward | 137.11 ms | 84.95 ms |
+| Separate full five-epoch CLI training | 24.00 s | 20.00 s |
 
-CLI BEC predictions and ASE checkpoint reloading agree within absolute/relative
-2e-5 tolerance. Stress references were independently checked against ASE's DFT
-labels and tensile-positive convention. Force/stress convergence plots convert
-CLI norm RMSE to the component RMSE used by parity tables: divide by √3 for
-force and by 10√6 for stress in GPa. Raw CLI CSVs remain unchanged.
+Microbenchmarks use three warmups, ten synchronized samples, the same checkpoint and float32. Both models remain resident, so microbenchmark memory is process-wide. Equal-work CLI runs use separate processes with the same seed/configuration; build time is excluded. For a short tutorial, compilation can outweigh this measured runtime gain. T4 standard training needs no FlashTP. The [historical validation](VALIDATION_30_FRAME.md) retains earlier T4 build checks, not a claim that this final four-layer model was FlashTP-tested on T4.
 
-The real 30-structure example uses an explicit composition-stratified **20/5/5**
-whole-structure split. Test labels do not supply training statistics or checkpoint
-selection. Geometry fingerprints screen duplicates, and E/F/S/BEC serialization
-round trips pass. The data lack trajectory/parent IDs, so these errors demonstrate
-training and evaluation, not independent generalization.
+## Bounded data/configuration experiments and Mosso
 
-Raw maximum test **ΣᵢZ*ᵢ** component residuals are **2.087 e** for the T4 quickstart
-and **3.435 e** for final A100 multitask predictions, versus approximately **3e-6 e**
-for reference labels. No ASR projection is applied. BEC parity is informative,
-but ASR, force and stress errors establish that these small fits are educational
-models and need more data and validation before research use. Quickstart E/F
-outputs are untrained. Neither notebook trains dielectric response.
+The [separate developer study](SUBSET_STUDY.md) records the completed 20/30/50/100/200 training-size sweep with fixed 20/20 holdouts for both ZrO₂ and Li₃PO₄. Only the bounded 240-frame pools were supplied to GPU runs; no full-dataset training was performed. Li₃PO₄ with 50 training structures gives useful plots and fits within the T4 time budget. Extra diagnostics remain in that study, outside the introductory notebook flow.
 
-## Default and configuration experiments
+Mosso Slurm validation completed BEC-16, multitask-32 standard and multitask-32 installed-FlashTP jobs. CLI times were 200.2 / 203.2 / 143.0 s on the individually recorded A100-PCIe/A800/A100-PCIe GPUs. Different devices prevent treating these wall times as a pure backend speedup. The same-checkpoint, same-GPU FlashTP numerical/gradient comparison also passed. All training jobs exited 0:0 and have the required job-ledger entries.
 
-An initial 40-epoch CPU BEC fit took **293.1 s**, with test BEC RMSE
-**0.0961 / 0.0663 e**. The following validation points came from that single
-learning curve, not separately timed runs:
+## Optional 512-atom LAMMPS field demonstration
 
-| Epoch | Validation diagonal RMSE (e) | Validation off-diagonal RMSE (e) |
-|---|---:|---:|
-| 5 | 0.1484 | 0.1104 |
-| 10 | 0.1136 | 0.0818 |
-| 20 | 0.0962 | 0.0796 |
-| 30 | 0.0815 | 0.0666 |
-| 40 | 0.0861 | 0.0621 |
+The public serial `e3gnn` interface successfully ran **512 atoms, 100 NVT steps, 0.25 fs timestep (25 fs total)** under a **0.001 V/Å z field**. The initial cell is a 2×2×4 repetition of a stoichiometric Li₃PO₄ training structure. The thermostat target is 100 K with a 50 fs damping time. This uses the multitask checkpoint and standard e3nn; the BEC-only checkpoint is explicitly rejected.
 
-Twenty epochs provide a useful quickstart parity plot at about half this CPU
-training cost. Validation, not test error, informed that choice. T4 exploratory
-runs with 8 channels / 2 layers / batch 1 / 10 epochs took **27.0 s**, with best
-validation BEC RMSE **0.2453 / 0.1399 e**. A 16-channel / 3-layer / batch 4 /
-10-epoch run took **23.0 s**, but reached only **2.0104 / 0.2267 e** and used
-**1.457 GiB** peak allocated memory. These are different optimization budgets:
-batch 4 has fewer updates per epoch. They do not establish batch-4 inferiority
-at equal optimizer steps.
+| Runtime | Fresh LAMMPS build | MD loop (100 steps) | Seconds per step | Max initial force difference from ASE |
+|---|---:|---:|---:|---:|
+| Colab T4 | 612.8 s (10.2 min) | 32.39 s | 0.324 | 4.51×10⁻⁵ eV/Å |
+| Mosso A100-80GB PCIe | Existing installation | 6.23 s | 0.0623 | 4.64×10⁻⁵ eV/Å |
 
-The initial 16-channel multitask mean-energy baseline gave CPU test energy RMSE
-**0.1259 eV/atom**. Species reference energies estimated from training data improved
-validation energy behavior; the final default uses that existing CLI option.
-The corresponding final CPU held-out energy RMSE is **0.0321 eV/atom**.
+These are different model checkpoints/environments and do not isolate hardware speedup. Colab builds the supported `stable_2Aug2023_update3` LAMMPS revision **46265e36ce79e4b42c9e5229b72a0ce2485845cd** with two compiler jobs, `BUILD_MPI=OFF`, and the documented MKL include-path workaround against PyTorch 2.11.0+cu130. Build logs are exported. Its separate deployment, zero-field check and field-process costs were 11.1 / 1.9 / 34.6 s. The loop timing excludes deployment, ASE comparison and compilation.
 
-## FlashTP: actual builds, numerical checks and equal-work timing
+Both zero-field and field initial forces pass independent ASE comparisons at absolute/relative tolerance 3×10⁻⁴. All 11 saved trajectory frames have finite positions and forces. Temperature rises from approximately 100 K to 204 K during the 25 fs run: **this is not an equilibrated trajectory or evidence of long-time stability**. Maximum force norm is about 3.06 eV/Å. The thermostat damping time exceeds the trajectory duration, and the initial DFT frame need not be relaxed on the small fitted model. Energy and pressure logged by LAMMPS are the model's zero-field quantities; force checks use the pair style's documented field defaults.
 
-Source revision **`d52e41454afc9636cd51757b65df44e7bcdca178`** built and imported
-on both GPUs, with architecture detection and `MAX_JOBS=2`. Fresh build/install
-cost **480.1 s on A100** and **723.4 s on T4**. Compilation dominates a short
-exercise. The final A100 rerun reused the installed build after checking the
-pinned clean source checkout; its report explicitly records zero new build time.
+Short MD is practical on T4; fresh compilation is the dominant added cost. The optional notebook cell remains off by default. Input scripts, measurements and trajectory summaries/plots are in [t4_md512](results/subset_study/t4_md512) and [mosso_md512](results/subset_study/mosso_md512). Full trajectories, deployed models and build logs are retained in verified development archives and produced by the optional notebook export.
 
-The pinned kernel requires channel multiplicities divisible by **32**. The initial
-16-channel attempt failed its `mul % WARPSIZE == 0` assertion after successful
-compilation. Corrected 32-channel T4 and A100 runs passed actual fused-backend
-selection, E/F/S/BEC output, weighted-loss and all **23 parameter-gradient** checks,
-including derivatives needed for force/stress training. T4's corrected check was
-an exploratory one-epoch model; final A100 used its trained 40-epoch checkpoint.
+## Automated verification and reproduction
 
-For final A100, maximum output differences were: energy **0**, force
-**1.43e-6**, stress **1.12e-8**, raw BEC irreps **9.54e-7**. Maximum gradient
-absolute difference was **9.87e-8**. Output absolute/relative tolerances were
-1e-4 and gradient tolerances 5e-4; weighted losses agreed within 1e-4.
+The final core unit suite passed **196 tests, with 51 skips**; all **16 tutorial/BEC regressions passed**, including real CLI training, split/label round trips, nonsymmetric BEC conversion across unequal batches, native monitoring and checkpoint reload. New MD checks verify that rotation/repetition preserves periodic neighbor distances and that BEC-only checkpoints are rejected before MD launch. GitHub also executes both output-free notebooks through nbclient with one epoch, and runs full Python 3.8/3.13 unit and formatting checks. Accelerator/integration skips are not claimed as coverage.
 
-| A100 operation | Standard e3nn | FlashTP | e3nn / FlashTP |
-|---|---:|---:|---:|
-| E/F/S/BEC forward, median | 41.02 ms | 26.81 ms | 1.53× |
-| Multitask forward + backward, median | 101.25 ms | 66.31 ms | 1.53× |
-| Full 5-epoch CLI training wall time | 24.00 s | 20.00 s | 1.20× |
-| Isolated CLI training peak allocated | 0.704 GiB | 0.189 GiB | — |
+For self-testing, use a fresh execution directory per configuration and save the ZIP before stopping Colab. See [the tutorial README](README.md) for local, CLI and notebook commands. A one-epoch run checks plumbing; omit the override to reproduce training quality. Only named VMs created for this work are released; pre-existing user sessions are preserved.
 
-Microbenchmarks use the same checkpoint/batch, three warmups, ten timed samples,
-CUDA synchronization and float32. Both models are resident, so their process-wide
-microbenchmark memory is not an isolated backend comparison. Full training runs
-use separate CLI processes, identical architecture/data/seed, and 100 optimizer
-steps each. Build time is excluded. Five-epoch learning curves agree closely
-(maximum validation weighted-loss difference 1.4e-5); both are exported.
-These are single-session measurements, not guaranteed speedups across workloads.
-
-## Automated verification
-
-- Seven tutorial/BEC inference tests pass: real one-epoch CLI training, all-label
-  round trips, split integrity, plots/physical stress conversion, ASE reload,
-  and a nonsymmetric BEC tensor across single-atom/unequal batches.
-- Local selected existing regressions: **142 passed, 20 skipped**.
-- GitHub full unit suite: **192 passed, 51 skipped** on both Python 3.8 and 3.13.
-  Accelerator/integration skips are not claimed as coverage.
-- GitHub Python 3.13 CPU workflow executes both notebooks with one epoch through
-  nbclient, which stops on cell errors; formatting/lint checks pass.
-
-The official Colab CLI can continue notebook execution after a cell error.
-An abandoned rerun with stale imports was discarded; its timings are excluded.
-Final runs used clean kernels, verified the fork/commit, and checked saved notebook
-error outputs and FlashTP status. Only named tutorial test VMs were released;
-pre-existing user sessions were preserved.
+The earlier 30-frame ZrO₂ measurements are preserved in [historical validation](VALIDATION_30_FRAME.md); they do not describe the revised defaults.

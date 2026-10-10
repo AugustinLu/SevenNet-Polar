@@ -1,0 +1,54 @@
+{
+  "atoms": 512,
+  "steps": 100,
+  "timestep_fs": 0.25,
+  "duration_fs": 25.0,
+  "temperature_K": 100.0,
+  "field_V_per_A": [
+    0.0,
+    0.0,
+    0.001
+  ],
+  "deploy_seconds": 7.053921222221106,
+  "lammps_process_seconds": 8.28661362407729,
+  "zero_field_check_seconds": 1.9817230277694762,
+  "md_loop_seconds": 6.23495,
+  "seconds_per_step": 0.0623495,
+  "initial_force_max_abs_difference_eV_per_A": {
+    "zero": 4.642593002324169e-05,
+    "field": 4.6236042266722954e-05
+  },
+  "max_force_eV_per_A": 3.059075622215966,
+  "finite_frames": 11,
+  "final_temperature_K": 203.85267472825726,
+  "binary_sha256": "839d630ed5f1b548196a71f45eb3dc7e850271850a710d908da23f1ccb05b2ab",
+  "environment": {
+    "python": "3.10.20",
+    "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+    "packages": {
+      "sevenn": "0.12.2.dev0",
+      "torch": "2.5.1",
+      "e3nn": "0.6.0",
+      "ase": "3.28.0",
+      "numpy": "2.2.5",
+      "matscipy": "1.2.0",
+      "torch-geometric": "2.7.0",
+      "matplotlib": "3.10.8"
+    },
+    "source_commit": "edaee9bb47d05d24233a4a2d85e7f0f2041cc597",
+    "source_dirty": false,
+    "sevenn_origin": "source checkout/sevenn/__init__.py",
+    "torch_cuda_build": "12.1",
+    "device": "cuda",
+    "precision": "float32 (no autocast)",
+    "gpu": "NVIDIA A100 80GB PCIe",
+    "capability": [
+      8,
+      0
+    ],
+    "gpu_memory_bytes": 84974239744,
+    "cuda_compiler": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2023 NVIDIA Corporation\nBuilt on Tue_Feb__7_19:32:13_PST_2023\nCuda compilation tools, release 12.1, V12.1.66\nBuild cuda_12.1.r12.1/compiler.32415258_0",
+    "cxx_compiler": "c++ (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0\nCopyright (C) 2019 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "note": "Short workflow demonstration; no claim of long-time stability. Energy/pressure are the zero-field model quantities. Field forces use the documented pair-style defaults."
+}

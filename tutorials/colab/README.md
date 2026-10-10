@@ -11,6 +11,16 @@ Both tutorials use 50 training + 20 validation + 20 test structures from the off
 
 See [data attribution and split limitations](../../example_inputs/tutorial_polar/DATA.md), [measured validation](VALIDATION.md), [subset comparison](SUBSET_STUDY.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
 
+## Optional LAMMPS field example
+
+The multitask notebook includes a disabled-by-default `RUN_FIELD_MD` cell: 512 stoichiometric Li₃PO₄ atoms, 100 NVT steps at 0.25 fs, a 100 K thermostat target and a 0.001 V/Å field. It builds an isolated, compatible serial LAMMPS executable or uses a supplied `LAMMPS_EXECUTABLE`. Initial zero-field and applied-field forces are checked against ASE; the archive includes input scripts, deployed model, logs, trajectory, plots and timings. This uses standard e3nn and requires trained energy/force outputs. Build time is separate from training; [measured validation](VALIDATION.md) records tested cost. The short trajectory demonstrates the workflow and does not establish equilibration or long-term stability.
+
+## Using VS Code with Colab
+
+With [Google's Colab extension](https://github.com/googlecolab/colab-vscode), open the local `.ipynb`, sign in, choose **Select Kernel → Colab → Auto Connect**, and select/create a runtime. Run the setup cell first and check the printed GPU and `sevenn` source path. Code executes on the remote runtime, so local Python environments and local helper files are not automatically present there; these notebooks fetch their own repository. Save the executed notebook locally and download its exported ZIP before removing the runtime with **Colab: Remove Server**. Disconnecting the editor is not a substitute for deleting an idle compute runtime.
+
+For repeatable comparisons, change one configuration at a time, restart the kernel before changing repository revision or backend installation, and retain each unique run directory/archive. Start with standard e3nn and leave both optional compilation sections disabled for the shortest test. The one-epoch override checks execution; the default 100 epochs produces the fitted example. Colab availability and actual GPU allocation vary.
+
 ## What each run saves
 
 Each execution creates a unique `polar-tutorial-*` directory and a ZIP archive. It contains the best validation checkpoint, YAML configuration, split data and source hash, training/inference logs, epoch CSV, partition-specific RMSE/MAE, parity PNG/PDF, convergence figure, machine/dependency details and timings. The notebook offers a Colab download control. Runtime allocation is excluded from setup-to-first-parity timing; package installation, subprocess training, subprocess inference, and optional FlashTP build are recorded separately. GPU peaks are PyTorch allocation/reservation, not total device memory.
