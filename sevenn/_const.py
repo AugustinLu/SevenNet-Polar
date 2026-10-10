@@ -24,7 +24,9 @@ SUPPORTING_METRICS = [
     'MAE',
     'Loss',
     'DiagRMSE',
-    'OffDiagRMSE'
+    'OffDiagRMSE',
+    'ASRMean',
+    'ASRMax',
 ]
 SUPPORTING_ERROR_TYPES = [
     'TotalEnergy',
@@ -97,6 +99,8 @@ def error_record_condition(x):
         if v[0] == 'TotalLoss':
             continue
         if v[1] not in SUPPORTING_METRICS:
+            return False
+        if v[1] in ('ASRMean', 'ASRMax') and v[0] != 'BornEffectiveCharges':
             return False
     return True
 

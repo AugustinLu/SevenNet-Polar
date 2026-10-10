@@ -136,6 +136,23 @@ def test_cpu_train_reload_and_evaluate(tmp_path, multitask):
         plt.close(convergence)
     assert profile['peak_cuda_allocated_bytes'] is None
     assert inference_profile['cli_seconds'] > 0
+    asr = support.asr_diagnostics(atoms, manifest, tmp_path / 'run')
+    curve = pd.read_csv(tmp_path / 'run/lc.csv')
+    expected_asr = asr[asr.partition == 'Validation'].prediction_max_abs_sum_e
+    # Validation evaluates one frozen checkpoint. Training uses successive
+    # optimizer states, so its epoch metric need not match a checkpoint reload.
+    np.testing.assert_allclose(
+        curve.validset_BornEffectiveCharges_ASRMax.iloc[0],
+        expected_asr.max(),
+        atol=2e-5,
+        rtol=2e-5,
+    )
+    np.testing.assert_allclose(
+        curve.validset_BornEffectiveCharges_ASRMean.iloc[0],
+        expected_asr.mean(),
+        atol=2e-5,
+        rtol=2e-5,
+    )
     import matplotlib.pyplot as plt
 
     plt.close(fig)

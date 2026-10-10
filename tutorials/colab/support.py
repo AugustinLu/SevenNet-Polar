@@ -224,6 +224,8 @@ def make_config(
     errors = [
         ['BornEffectiveCharges', 'DiagRMSE'],
         ['BornEffectiveCharges', 'OffDiagRMSE'],
+        ['BornEffectiveCharges', 'ASRMean'],
+        ['BornEffectiveCharges', 'ASRMax'],
         ['TotalLoss', 'None'],
     ]
     if multitask:
@@ -513,8 +515,13 @@ def asr_diagnostics(atoms, manifest, run_dir):
                 {
                     'partition': partition,
                     'structure_id': i,
+                    'natoms': len(rows),
                     'reference_max_abs_sum_e': float(np.abs(ref.sum(0)).max()),
                     'prediction_max_abs_sum_e': float(np.abs(pred.sum(0)).max()),
+                    'prediction_max_abs_mean_e': float(
+                        np.abs(pred.sum(0)).max() / len(rows)
+                    ),
+                    'sum_error_max_abs_e': float(np.abs((pred - ref).sum(0)).max()),
                 }
             )
     frame = pd.DataFrame(records)
@@ -537,10 +544,18 @@ def learning_curves(run_dir, multitask=False):
             ('Stress_RMSE', 'Stress', 'GPa'),
             ('TotalLoss', 'Weighted loss', 'weighted units'),
         ]
+    has_asr = 'validset_BornEffectiveCharges_ASRMax' in curve
+    if has_asr:
+        targets += [
+            ('BornEffectiveCharges_ASRMax', 'Raw ASR maximum', 'e / cell'),
+            ('BornEffectiveCharges_ASRMean', 'Raw ASR mean', 'e / cell'),
+        ]
+    columns = 3 if multitask else 2
+    rows = (len(targets) + columns - 1) // columns
     fig, axes = plt.subplots(
-        1 if not multitask else 2,
-        2 if not multitask else 3,
-        figsize=(11, 4) if not multitask else (14, 8),
+        rows,
+        columns,
+        figsize=(11 if not multitask else 14, 4 * rows),
         constrained_layout=True,
     )
     for ax, (suffix, title, unit) in zip(axes.flat, targets):
@@ -568,6 +583,8 @@ def learning_curves(run_dir, multitask=False):
         ax.set(title=title, xlabel='Epoch', ylabel=unit)
         ax.grid(alpha=0.2)
         ax.legend(frameon=False)
+    for ax in list(axes.flat)[len(targets) :]:
+        ax.axis('off')
     fig.savefig(run_dir / 'convergence.png', dpi=160)
     return curve, fig
 
