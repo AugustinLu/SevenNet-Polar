@@ -1,6 +1,11 @@
 # Compact validation artifacts
 
 See [measured validation](../VALIDATION.md) for interpretation and test coverage.
+
+`subset_study` contains the October 11 bounded 20/30/50/100/200 comparison for
+ZrO₂ and Li₃PO₄, per-frame tensor sums, exact configurations and Mosso checks.
+See [the study](../SUBSET_STUDY.md). The directories below retain the earlier
+30-frame ZrO₂ defaults for historical comparison.
 Records were collected on 2026-10-10. Full checkpoints, executed notebooks,
 DFT label copies and raw logs remain in the development validation archive;
 each tutorial exports these files in its own ZIP when run.

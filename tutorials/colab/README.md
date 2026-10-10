@@ -9,7 +9,7 @@ Choose a Colab runtime and **Run all**, or open either notebook in local Jupyter
 
 Both tutorials use 50 training + 20 validation + 20 test structures from the official Li₃PO₄ dataset. Both models use lmax=2, four layers, batch size 4 and 100 epochs: the quickstart has 16 channels; the advanced notebook has 32 on CUDA and 16 on CPU. These compact models are intended for education. It is not a production potential. The quickstart optimizes only BEC loss; its energy/force outputs must not be used. The advanced notebook fits E/F/S/BEC together. Neither trains dielectric response.
 
-See [data attribution and split limitations](../../example_inputs/tutorial_polar/DATA.md), [measured validation](VALIDATION.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
+See [data attribution and split limitations](../../example_inputs/tutorial_polar/DATA.md), [measured validation](VALIDATION.md), [subset comparison](SUBSET_STUDY.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
 
 ## What each run saves
 
@@ -76,6 +76,6 @@ Use a fresh output directory for each configuration. This command runs the produ
 python tutorials/colab/subset_experiment.py --dataset li3po4 --sizes 20 30 50 100 200 --epochs 100 --channels 32 --layers 4 --batch-size 4 --output /tmp/polar-li-subsets
 ```
 
-Use `--multitask` for E/F/S/BEC, or `--dataset zro2` for ZrO₂. Each size saves its exact configuration, timings, fixed split, validation errors, tensor-sum diagnostics and checkpoint archive. `summary.csv` collects the comparison. Runs are single-seed observations; larger subsets do not guarantee smaller worst-case sum errors.
+Use `--multitask` for E/F/S/BEC, or `--dataset zro2` for ZrO₂. On an HPC runtime with an installed CUDA extension, `--multitask --flash --channels 32` enables FlashTP and verifies outputs/loss/gradients against e3nn. It does not install the extension; record its version separately. Each size saves its exact configuration, timings, fixed split, validation errors, tensor-sum diagnostics and checkpoint archive. `summary.csv` collects the comparison. Runs are single-seed observations; larger subsets do not guarantee smaller worst-case sum errors.
 
 For notebook customization, set `DATASET` and `TRAINING_STRUCTURES` in the data cell, or the environment variables `SEVENNET_TUTORIAL_DATASET` and `SEVENNET_TUTORIAL_TRAINING_STRUCTURES` before execution. The 20 validation and 20 test frames remain fixed. One epoch checks installation and execution; it does not reproduce the fitted model's accuracy.

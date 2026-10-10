@@ -1,5 +1,11 @@
 # Measured tutorial validation
 
+The notebooks now use the bounded Li₃PO₄ 50/20/20 split, four layers, batch size 4 and 100 epochs. See [the dataset/configuration study](SUBSET_STUDY.md) for all size comparisons and [compact evidence](results/subset_study). The older measurements below describe the previous 30-frame ZrO₂ defaults and should not be applied to the revised notebooks.
+
+Final Colab end-to-end measurements are being recorded for this revision; they will be added here after execution and artifact checks.
+
+# Historical validation: original 30-frame ZrO₂ tutorials
+
 Executed on 2026-10-10, developed on `tutorials/colab-bec`. The source notebooks
 contain no outputs. Compact machine-readable records, learning curves, metrics,
 ASR diagnostics and selected figures are in [results](results/README.md).
