@@ -92,3 +92,7 @@ extend-select = ["E501"]
 [tool.ruff.format]
 quote-style = "single"
 docstring-code-format = true
+
+[tool.ruff.lint.per-file-ignores]
+# Notebook setup and analysis intentionally import after install/configuration.
+"tutorials/colab/*.ipynb" = ["E402"]

@@ -1,0 +1,188 @@
+{
+  "environment": {
+    "python": "3.10.20",
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "packages": {
+      "sevenn": "0.12.2.dev0",
+      "torch": "2.5.1",
+      "e3nn": "0.6.0",
+      "ase": "3.28.0",
+      "numpy": "2.2.6",
+      "matscipy": "1.2.0",
+      "torch-geometric": "2.7.0",
+      "matplotlib": "3.10.8"
+    },
+    "source_commit": "bf44667004c315f13471dd1254f35e3eef9d625f",
+    "source_dirty": true,
+    "sevenn_origin": "sevenn/__init__.py (verified checkout)",
+    "torch_cuda_build": null,
+    "device": "cpu",
+    "precision": "float32 (no autocast)",
+    "cuda_compiler": null,
+    "cxx_compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "cpu": "Apple M5 Pro"
+  },
+  "install_skipped": true,
+  "timings": {
+    "repository_fetch_seconds": 4.63749747723341e-05,
+    "package_install_seconds": 7.191702025011182e-05,
+    "setup_to_first_parity_seconds": 161.97284116700757
+  },
+  "training": {
+    "cli_seconds": 148.7378246249864,
+    "peak_cuda_allocated_bytes": null,
+    "peak_cuda_reserved_bytes": null,
+    "cpu_threads": 2,
+    "subprocess_wall_seconds": 150.58798770897556
+  },
+  "inference": {
+    "cli_seconds": 7.466754749999382,
+    "peak_cuda_allocated_bytes": null,
+    "peak_cuda_reserved_bytes": null,
+    "cpu_threads": 2,
+    "subprocess_wall_seconds": 9.03486662497744
+  },
+  "split": {
+    "source_sha256": "6f249335edf721d132e41b9d9f830537d2c3603b06e8de4c29c8a37292745441",
+    "seed": 42,
+    "indices": {
+      "Train": [
+        0,
+        1,
+        3,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        18,
+        20,
+        21,
+        25,
+        26,
+        28
+      ],
+      "Validation": [
+        2,
+        4,
+        22,
+        27,
+        29
+      ],
+      "Test": [
+        5,
+        17,
+        19,
+        23,
+        24
+      ]
+    },
+    "geometry_fingerprints": [
+      "bffe8e9fd1d0df7dfcafe9ae32433acdd2131a9b6ed7751f863b0ecf7d4528a3",
+      "6133315616c6f7ce2073f82b7b1bd474c116112ba5a9dc12148327d68acbb279",
+      "f036071997c877b7cf3d87e62e5e3e78e389b2afd33a7cdd6b23d68317c03b60",
+      "4336cbac3a80acd3e72ec420d57318e99b02a528e5fc2dfe62005caa03b6eeb6",
+      "9737afa155a8b72cdeb228e94438e5950a555486add3f56cbe5eaf121116aa01",
+      "cc744a299cfb71d7361365e6eaec8a63d632da70cb1b6de957742a181e968d80",
+      "d562a9135d913601285a307e8ca95bc1dd8fc0e11787a602aacd35676acd9f50",
+      "d63fc171f493dca79fe6051fc9f8a4babc11fb8ed429cdec94a0c4970016e6a8",
+      "10d5197e917857f9b28d7df57ebe781de4db7d00d94fcd9aa1d88de7f6156537",
+      "11c867927b889e646ebfabf3fda06809afd0360ece8c21ccdb6befeda1450fab",
+      "6834e6bf56e0e6150137ff8590da7cd0e4640c53199263d0f41e99b071731d89",
+      "dda5981530886b610df1b0d55d62a9b37afd793f8270530e00f925fcde413878",
+      "e3e2a839f4a7878d58565fca5e9574b26202b5720c685170341f8027b7fb3487",
+      "883ffd3d9720e4904df758a7b4e81fe2da1689cdc0a06e72d46775e9480197e4",
+      "4eef98b418a33f2584cc7b09ee68bb786180b887081a3631278357c39ab689e0",
+      "765c693989c3e92bd224cb14888901808ae0a11fc86a6d71ed7b4b57bc0b4075",
+      "14c32feee6bcc16631b79a3b3830aca3c908a1b087357fc8550f10ba1a1243a3",
+      "d3c9c7e4057ebcd2c8179400351413eb553c98c27e09c9b6d66609fba458b304",
+      "34e74753131e0bdbc3ed0b87fa2ff80db7ad6fb0dc52ba5786bb5f19781f6fa2",
+      "50fde1f023593f863e1a7d830c3452baa67ed6f1a17a0f15671097dab1a24ef3",
+      "f4448e02d515411d541b3a8b881d22086bad0cee1952ef981b1b2b72bd1fcd19",
+      "2cb5a601636cb12703c07a3d71ae54a0c344234cfc67316d818dde4a157c5d25",
+      "5acc8ddcd3bfe8bc7d6819d2689d0025da3ccb5ab6fb2d33b48f7611e7376a7d",
+      "450cb9117adf2688cc1961e10850e0d6fe2ace3d6de267d351b7bc05f2816da0",
+      "d63156facee7a961f32a8a7a0a9d72a72161b843e6ae68c7a8fce06fbc3e73ab",
+      "3f05b67c3309707a02cfd8c01d3bdade8687ddb4c49408de68462ba0150ad960",
+      "ed95a579ab5ac796960e11253090e900332d95548382a1e3b61a22ea63a0d787",
+      "bf0a7a466877eee9c4018fa9ba09e3de11309d0af0c98939c49322282dfd157d",
+      "f291aed44b1b267252cdee5ce58b57eebbce37c4673b4a5f59a6b64a2c5f17b1",
+      "86a81d6325698e51d0c53d7a8739df7a745b197a0a3d424c4538b5c3e298f236"
+    ],
+    "split_policy": "composition-stratified random demonstration; trajectory independence unknown"
+  },
+  "configuration": {
+    "model": {
+      "chemical_species": "auto",
+      "cutoff": 6.0,
+      "channel": 16,
+      "lmax": 2,
+      "num_convolution_layer": 3,
+      "is_parity": false
+    },
+    "train": {
+      "random_seed": 42,
+      "num_workers": 0,
+      "device": "cpu",
+      "epoch": 20,
+      "per_epoch": 5,
+      "best_metric": "TotalLoss",
+      "is_train_bec": true,
+      "is_train_stress": false,
+      "is_train_dielectric": false,
+      "energy_loss_weight": 0.0,
+      "force_loss_weight": 0.0,
+      "stress_loss_weight": 0.0,
+      "bec_loss_weight": 1.0,
+      "loss": "mse",
+      "optimizer": "adam",
+      "optim_param": {
+        "lr": 0.005
+      },
+      "scheduler": "exponentiallr",
+      "scheduler_param": {
+        "gamma": 0.992
+      },
+      "error_record": [
+        [
+          "BornEffectiveCharges",
+          "DiagRMSE"
+        ],
+        [
+          "BornEffectiveCharges",
+          "OffDiagRMSE"
+        ],
+        [
+          "TotalLoss",
+          "None"
+        ]
+      ]
+    },
+    "data": {
+      "batch_size": 1,
+      "preprocess_num_cores": 1,
+      "shift": "per_atom_energy_mean",
+      "scale": 1.0,
+      "data_format": "ase",
+      "data_format_args": {
+        "format": "extxyz",
+        "index": ":"
+      },
+      "load_trainset_path": [
+        "data/train.extxyz"
+      ],
+      "load_validset_path": [
+        "data/validation.extxyz"
+      ]
+    }
+  },
+  "flash": {
+    "status": "not requested; standard e3nn quickstart"
+  }
+}

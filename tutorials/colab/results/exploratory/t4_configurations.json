@@ -1,0 +1,211 @@
+{
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "packages": {
+      "sevenn": "0.12.2.dev0",
+      "torch": "2.11.0+cu130",
+      "e3nn": "0.6.0",
+      "ase": "3.29.0",
+      "numpy": "2.1.3",
+      "matscipy": "1.3.0",
+      "torch-geometric": "2.8.0.post1",
+      "matplotlib": "3.10.0"
+    },
+    "source_commit": "b913210b8c2294ea8248db1ef11ab4a8e10a0370",
+    "source_dirty": true,
+    "sevenn_origin": "sevenn/__init__.py (verified checkout)",
+    "torch_cuda_build": "13.0",
+    "device": "cuda",
+    "precision": "float32 (no autocast)",
+    "gpu": "Tesla T4",
+    "capability": [
+      7,
+      5
+    ],
+    "gpu_memory_bytes": 15637086208,
+    "cuda_compiler": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx_compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "experiments": {
+    "small_8x2_b1": {
+      "config": {
+        "model": {
+          "chemical_species": "auto",
+          "cutoff": 6.0,
+          "channel": 8,
+          "lmax": 2,
+          "num_convolution_layer": 2,
+          "is_parity": false
+        },
+        "train": {
+          "random_seed": 42,
+          "num_workers": 0,
+          "device": "cuda",
+          "epoch": 10,
+          "per_epoch": 2,
+          "best_metric": "TotalLoss",
+          "is_train_bec": true,
+          "is_train_stress": false,
+          "is_train_dielectric": false,
+          "energy_loss_weight": 0.0,
+          "force_loss_weight": 0.0,
+          "stress_loss_weight": 0.0,
+          "bec_loss_weight": 1.0,
+          "loss": "mse",
+          "optimizer": "adam",
+          "optim_param": {
+            "lr": 0.005
+          },
+          "scheduler": "exponentiallr",
+          "scheduler_param": {
+            "gamma": 0.992
+          },
+          "error_record": [
+            [
+              "BornEffectiveCharges",
+              "DiagRMSE"
+            ],
+            [
+              "BornEffectiveCharges",
+              "OffDiagRMSE"
+            ],
+            [
+              "TotalLoss",
+              "None"
+            ]
+          ]
+        },
+        "data": {
+          "batch_size": 1,
+          "preprocess_num_cores": 1,
+          "shift": "per_atom_energy_mean",
+          "scale": 1.0,
+          "data_format": "ase",
+          "data_format_args": {
+            "format": "extxyz",
+            "index": ":"
+          },
+          "load_trainset_path": [
+            "data/train.extxyz"
+          ],
+          "load_validset_path": [
+            "data/validation.extxyz"
+          ]
+        }
+      },
+      "profile": {
+        "cli_seconds": 24.004311614000017,
+        "peak_cuda_allocated_bytes": 170319872,
+        "peak_cuda_reserved_bytes": 226492416,
+        "cpu_threads": 2,
+        "subprocess_wall_seconds": 27.015123810999967
+      },
+      "best_validation": {
+        "epoch": 9.0,
+        "lr": 0.004689,
+        "trainset_BornEffectiveCharges_DiagRMSE": 0.407539,
+        "trainset_BornEffectiveCharges_OffDiagRMSE": 0.164461,
+        "trainset_TotalLoss": 0.624533,
+        "validset_BornEffectiveCharges_DiagRMSE": 0.245278,
+        "validset_BornEffectiveCharges_OffDiagRMSE": 0.139907,
+        "validset_TotalLoss": 0.30233
+      }
+    },
+    "standard_16x3_b4": {
+      "config": {
+        "model": {
+          "chemical_species": "auto",
+          "cutoff": 6.0,
+          "channel": 16,
+          "lmax": 2,
+          "num_convolution_layer": 3,
+          "is_parity": false
+        },
+        "train": {
+          "random_seed": 42,
+          "num_workers": 0,
+          "device": "cuda",
+          "epoch": 10,
+          "per_epoch": 2,
+          "best_metric": "TotalLoss",
+          "is_train_bec": true,
+          "is_train_stress": false,
+          "is_train_dielectric": false,
+          "energy_loss_weight": 0.0,
+          "force_loss_weight": 0.0,
+          "stress_loss_weight": 0.0,
+          "bec_loss_weight": 1.0,
+          "loss": "mse",
+          "optimizer": "adam",
+          "optim_param": {
+            "lr": 0.005
+          },
+          "scheduler": "exponentiallr",
+          "scheduler_param": {
+            "gamma": 0.992
+          },
+          "error_record": [
+            [
+              "BornEffectiveCharges",
+              "DiagRMSE"
+            ],
+            [
+              "BornEffectiveCharges",
+              "OffDiagRMSE"
+            ],
+            [
+              "TotalLoss",
+              "None"
+            ]
+          ]
+        },
+        "data": {
+          "batch_size": 4,
+          "preprocess_num_cores": 1,
+          "shift": "per_atom_energy_mean",
+          "scale": 1.0,
+          "data_format": "ase",
+          "data_format_args": {
+            "format": "extxyz",
+            "index": ":"
+          },
+          "load_trainset_path": [
+            "data/train.extxyz"
+          ],
+          "load_validset_path": [
+            "data/validation.extxyz"
+          ]
+        }
+      },
+      "profile": {
+        "cli_seconds": 19.27490399699991,
+        "peak_cuda_allocated_bytes": 1564268032,
+        "peak_cuda_reserved_bytes": 2384461824,
+        "cpu_threads": 2,
+        "subprocess_wall_seconds": 23.006755573999953
+      },
+      "best_validation": {
+        "epoch": 10.0,
+        "lr": 0.004651,
+        "trainset_BornEffectiveCharges_DiagRMSE": 2.168754,
+        "trainset_BornEffectiveCharges_OffDiagRMSE": 0.292729,
+        "trainset_TotalLoss": 14.730748,
+        "validset_BornEffectiveCharges_DiagRMSE": 2.010383,
+        "validset_BornEffectiveCharges_OffDiagRMSE": 0.226723,
+        "validset_TotalLoss": 12.177573
+      }
+    }
+  },
+  "flash": {
+    "status": "failed",
+    "installation": {
+      "source_revision": "d52e41454afc9636cd51757b65df44e7bcdca178",
+      "cuda_arch": "75",
+      "max_jobs": 2,
+      "fetch_seconds": 2.002041937000058,
+      "build_install_seconds": 723.3773504119999
+    },
+    "error": ""
+  }
+}

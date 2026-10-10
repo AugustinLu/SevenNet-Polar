@@ -24,6 +24,20 @@ The old README (prior to v0.12.0) can be found [here](./docs/old_readme/).
 
 ## Training and Using SevenNet-Polar
 
+### Python notebooks and Google Colab
+
+Train on the real 30-structure ZrO₂ example, inspect held-out parity plots,
+and download the checkpoint and results:
+
+| Tutorial | Runtime | Open |
+|---|---|---|
+| [BEC quickstart](tutorials/colab/01_bec_quickstart.ipynb) | CPU / free T4; no FlashTP required | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/01_bec_quickstart.ipynb) |
+| [Multitask energy/force/stress/BEC](tutorials/colab/02_multitask_a100_flashtp.ipynb) | A100 when available; optional FlashTP checks and timings | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) |
+
+These tutorials exclude dielectric training. See the
+[tutorial guide](tutorials/colab/README.md) for usage, data attribution,
+split limitations, troubleshooting, and measured validation coverage.
+
 SevenNet-Polar introduces new configurations to train models that predict Born Effective Charges (BEC). These options are additions to the regular SevenNet training configuration.
 
 ### Training Configuration

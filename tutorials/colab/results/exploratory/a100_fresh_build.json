@@ -1,0 +1,15 @@
+{
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "installation": {
+    "source_revision": "d52e41454afc9636cd51757b65df44e7bcdca178",
+    "cuda_arch": "80",
+    "max_jobs": 2,
+    "fetch_seconds": 2.0017258209999795,
+    "build_install_seconds": 480.086379409
+  },
+  "first_comparison": {
+    "status": "failed",
+    "reason": "The initial 16-channel model violates the FlashTP kernel requirement mul % WARPSIZE == 0."
+  },
+  "resolution": "The final 32-channel notebook passes output, weighted-loss, all-gradient, and five-epoch training checks; see ../a100_multitask/flash_report.json."
+}

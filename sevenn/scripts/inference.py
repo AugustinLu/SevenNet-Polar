@@ -14,8 +14,20 @@ from sevenn.train.modal_dataset import SevenNetMultiModalDataset
 
 
 def write_inference_csv(output_list, out):
+    # The model's BEC head emits irreps; CSV columns are Cartesian ij entries.
+    bec_tensor = None
     for i, output in enumerate(output_list):
         output = output.fit_dimension()
+        if KEY.PRED_BORN_EFFECTIVE_CHARGES in output:
+            if bec_tensor is None:
+                from e3nn.io import CartesianTensor
+
+                bec_tensor = CartesianTensor('ij')
+                bec_rtp = bec_tensor.reduced_tensor_products()
+            prediction = output[KEY.PRED_BORN_EFFECTIVE_CHARGES]
+            output[KEY.PRED_BORN_EFFECTIVE_CHARGES] = bec_tensor.to_cartesian(
+                prediction, bec_rtp.to(prediction.device)
+            )
         if KEY.STRESS in output:
             output[KEY.STRESS] = output[KEY.STRESS] * 1602.1766208
         if KEY.PRED_STRESS in output:

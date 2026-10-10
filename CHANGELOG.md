@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 Field forces change: re-examine field runs made with earlier versions (see "Fixed").
 
 ### Fixed
+- **BEC inference CSV export:** preserve predicted BECs when separating tensor
+  batches into structures, and convert the head's irreps to Cartesian components.
+  Single-atom structures retain the atom dimension. E/F/S behavior is unchanged.
 - **LAMMPS field force was transposed** (`pair_style e3gnn` and `e3gnn/parallel`). The BEC
   convention is Z\*_ab = ∂P_a/∂r_b (field index first; model and DFT labels), so the force is
   F = Z\*ᵀE. The pair styles applied Z\*E, which gives wrong components transverse to the field
@@ -17,6 +20,8 @@ Field forces change: re-examine field runs made with earlier versions (see "Fixe
   Energy, force, stress and BEC readouts are unaffected.
 
 ### Added
+- Two Python/Colab training tutorials: BEC quickstart for CPU/free T4 and
+  multitask E/F/S/BEC with optional A100 FlashTP validation and benchmarks.
 - `enforce_asr [yes|no]` after `efield` in `pair_coeff` (default **yes**): subtract the mean BEC
   so that Σ_i Z\*_i = 0 and the field forces sum to zero (no centre-of-mass drift). In the parallel
   pair style the mean is global over all MPI ranks.
