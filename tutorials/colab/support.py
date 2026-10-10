@@ -309,6 +309,7 @@ def make_config(
     layers=3,
     device='cpu',
     seed=42,
+    monitor_asr=False,
 ):
     if min(epochs, batch_size, channel, layers) < 1:
         raise ValueError(
@@ -317,10 +318,13 @@ def make_config(
     errors = [
         ['BornEffectiveCharges', 'DiagRMSE'],
         ['BornEffectiveCharges', 'OffDiagRMSE'],
-        ['BornEffectiveCharges', 'ASRMean'],
-        ['BornEffectiveCharges', 'ASRMax'],
         ['TotalLoss', 'None'],
     ]
+    if monitor_asr:
+        errors[2:2] = [
+            ['BornEffectiveCharges', 'ASRMean'],
+            ['BornEffectiveCharges', 'ASRMax'],
+        ]
     if multitask:
         errors = [['Energy', 'RMSE'], ['Force', 'RMSE'], ['Stress', 'RMSE']] + errors
     return {

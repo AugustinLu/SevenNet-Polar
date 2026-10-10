@@ -1,0 +1,7 @@
+{
+  "cli_seconds": 12.7254593749999,
+  "peak_cuda_allocated_bytes": 585425920,
+  "peak_cuda_reserved_bytes": 780140544,
+  "cpu_threads": 2,
+  "subprocess_wall_seconds": 17.004943841999875
+}

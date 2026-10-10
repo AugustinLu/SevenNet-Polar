@@ -13,7 +13,7 @@ See [data attribution and split limitations](../../example_inputs/tutorial_polar
 
 ## What each run saves
 
-Each execution creates a unique `polar-tutorial-*` directory and a ZIP archive. It contains the best validation checkpoint, YAML configuration, split data and source hash, training/inference logs, epoch CSV, partition-specific RMSE/MAE, raw acoustic-sum-rule residuals, parity PNG/PDF, convergence figure, machine/dependency details and timings. The notebook offers a Colab download control. Runtime allocation is excluded from setup-to-first-parity timing; package installation, subprocess training, subprocess inference, and optional FlashTP build are recorded separately. GPU peaks are PyTorch allocation/reservation, not total device memory.
+Each execution creates a unique `polar-tutorial-*` directory and a ZIP archive. It contains the best validation checkpoint, YAML configuration, split data and source hash, training/inference logs, epoch CSV, partition-specific RMSE/MAE, parity PNG/PDF, convergence figure, machine/dependency details and timings. The notebook offers a Colab download control. Runtime allocation is excluded from setup-to-first-parity timing; package installation, subprocess training, subprocess inference, and optional FlashTP build are recorded separately. GPU peaks are PyTorch allocation/reservation, not total device memory.
 
 Training and inference use the package CLI; ASE checkpoint reloading must agree with CLI BECs. Stress CSV values are converted from pressure-sign kbar to tensile-positive GPa. BEC predictions are uncorrected, with all six off-diagonal components retained.
 
@@ -51,20 +51,9 @@ Repeat on an A100 for the advanced notebook. Download each run's ZIP before stop
 - No `nvcc`, failed build, failed forward/backward agreement: continue with standard e3nn. `flash_report.json` records the failure; no speedup is implied.
 - Slow CPU: use fewer epochs for a smoke test or select T4. An incomplete fit should be labeled as such.
 
-## Monitoring the raw tensor sum
+## Developer diagnostics
 
-Both notebooks request `BornEffectiveCharges_ASRMax` and `BornEffectiveCharges_ASRMean` in the epoch CSV and convergence plots. For each cell the diagnostic is `max_ab |sum_i Z*_{i,ab}|`; the logger then takes the maximum or mean over cells. It keeps graph boundaries intact even with unequal atom counts in a batch. It converts the model's irreps to Cartesian tensors and sums in float64. These metrics do not change the loss, checkpoint selection, or predictions.
-
-Validation evaluates one fixed model state per epoch. Training aggregates predictions while optimizer weights change, so its epoch metric need not match inference with the final checkpoint. The dotted validation-reference lines show the label baseline. A nonzero reference sum is retained rather than silently corrected. The post-inference `asr.csv` additionally includes atom counts, atom-normalized residuals, and prediction-minus-reference tensor sums.
-
-To monitor another BEC training run, append these entries to its existing `train.error_record`:
-
-```yaml
-- ['BornEffectiveCharges', 'ASRMean']
-- ['BornEffectiveCharges', 'ASRMax']
-```
-
-The notebooks retain the CLI's established loss definitions and normalization. Tutorial support preserves BEC predictions during batched inference, converts irreps to Cartesian CSV columns, and adds raw tensor-sum diagnostics, with regression coverage.
+The introductory notebook flow focuses on RMSE, parity and checkpoint reuse. The [separate dataset study](SUBSET_STUDY.md) retains tensor-sum diagnostics and their reference-label caveats for future refinement. `support.make_config(..., monitor_asr=True)` opts into native monitoring; it is off in the notebooks. The validation-only experiment harness enables these extra diagnostics.
 
 ## Reproduce the bounded subset comparison
 

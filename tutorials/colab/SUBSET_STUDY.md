@@ -14,7 +14,7 @@ For each cell, let `S_pred = Σᵢ Z*_pred,i` and `S_ref = Σᵢ Z*_ref,i`.
 - **Reference sum:** `max_ab |S_ref,ab|`, in e.
 - **Tensor-sum error:** `max_ab |S_pred,ab − S_ref,ab|`, in e. Subtract tensors before taking maxima; subtracting two reported scalar maxima is incorrect.
 
-Partition maxima and medians aggregate these per-cell values. They are not normalized by atom count. `asr.csv` also saves atom-normalized values, composition and original source IDs. Native `ASRMean`/`ASRMax` epoch metrics report raw predicted sums, with validation-reference baselines in the convergence plots. Monitoring does not alter predictions, training loss or best-checkpoint selection.
+Partition maxima and medians aggregate these per-cell values. They are not normalized by atom count. `asr.csv` also saves atom-normalized values, composition and original source IDs. The developer harness opts into native `ASRMean`/`ASRMax` epoch metrics, with validation-reference baselines in its convergence plots. The beginner notebooks omit these diagnostics and focus on RMSE, parity and checkpoint reuse. Monitoring does not alter predictions, training loss or best-checkpoint selection.
 
 Li₁₁O₁₆P₄ labels have a reference sum near **1 e per cell**. The dataset author considers a charged-cell DFPT convention the likely explanation; the original DFPT settings have not been independently verified. These frames and labels are retained unchanged. Li₁₂O₁₆P₄ and Li₂₂O₃₁P₈ reference sums are much closer to zero, though not exact. The fixed Li validation maximum is **1.0266 e**. A raw prediction maximum near 1 e therefore does not mean a 1 e model error. Inspect errors and compositions together.
 
@@ -41,7 +41,7 @@ The checkpoint minimizes validation weighted total loss. Test predictions were n
 
 ZrO₂ validation reference sums are at most 8e-8 e, so raw sum and tensor-sum error agree to the displayed precision. Larger Li subsets improve component RMSE and typical sum errors, but the maximum is not monotonic. Fifty training frames give a useful compromise without the runtime cost of 100–200. That observation does not rule out better ZrO₂ settings or predict another seed's worst-case error.
 
-The screening runtime was Colab A100-SXM4-40GB, Python 3.13.15, PyTorch 2.11.0+cu130, e3nn 0.6.0 and ASE 3.29.0, float32 with two CPU threads. Exact source revision `a8018ed65aaa4535c2a17ac429c9e63bbfc79680`, configurations, environment, checkpoint epochs, source IDs and per-frame sum tensors are retained in [machine-readable reports](results/subset_study). The final notebooks additionally enable native ASR monitoring introduced on the refinement branch.
+The screening runtime was Colab A100-SXM4-40GB, Python 3.13.15, PyTorch 2.11.0+cu130, e3nn 0.6.0 and ASE 3.29.0, float32 with two CPU threads. Exact source revision `a8018ed65aaa4535c2a17ac429c9e63bbfc79680`, configurations, environment, checkpoint epochs, source IDs and per-frame sum tensors are retained in [machine-readable reports](results/subset_study). The refinement branch adds optional native monitoring; the notebooks leave it disabled to keep the introductory flow concise.
 
 ## Configuration checks on Mosso
 

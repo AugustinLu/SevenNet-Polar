@@ -26,7 +26,7 @@ The old README (prior to v0.12.0) can be found [here](./docs/old_readme/).
 
 ### Python notebooks and Google Colab
 
-Train on the real 30-structure ZrO₂ example, inspect held-out parity plots,
+Train on a real Li₃PO₄ subset (50 training / 20 validation / 20 test structures), inspect held-out parity plots,
 and download the checkpoint and results:
 
 | Tutorial | Runtime | Open |

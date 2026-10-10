@@ -164,7 +164,9 @@ def test_cpu_train_reload_and_evaluate(tmp_path, multitask):
     structures, paths, all_path, manifest, _ = support.prepare_data(
         ROOT, tmp_path / 'data'
     )
-    config = support.make_config(paths, 1, multitask=multitask, channel=4, layers=2)
+    config = support.make_config(
+        paths, 1, multitask=multitask, channel=4, layers=2, monitor_asr=True
+    )
     checkpoint, profile = support.train(ROOT, tmp_path / 'run', config)
     atoms, graphs, inference_profile = support.evaluate(
         ROOT, tmp_path / 'run', checkpoint, all_path, 'cpu'

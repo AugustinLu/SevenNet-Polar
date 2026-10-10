@@ -80,6 +80,7 @@ def main():
             layers=args.layers,
             device=device,
             seed=args.seed,
+            monitor_asr=True,
         )
         config['train']['bec_loss_weight'] = args.bec_weight
         checkpoint, profile = support.train(
