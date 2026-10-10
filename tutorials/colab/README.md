@@ -2,12 +2,12 @@
 
 | Tutorial | Runtime | Start |
 |---|---|---|
-| [BEC quickstart](01_bec_quickstart.ipynb) | CPU or free T4; standard e3nn | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/01_bec_quickstart.ipynb) |
-| [Multitask E/F/S/BEC](02_multitask_a100_flashtp.ipynb) | A100 when available; standard path with optional FlashTP comparison | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/02_multitask_a100_flashtp.ipynb) |
+| [BEC quickstart](01_bec_quickstart.ipynb) | CPU or free T4; standard e3nn | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/01_bec_quickstart.ipynb) |
+| [Multitask E/F/S/BEC](02_multitask_a100_flashtp.ipynb) | A100 when available; standard path with optional FlashTP comparison | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) |
 
-Choose a Colab runtime and **Run all**, or open either notebook in local Jupyter with PyTorch installed. Setup installs this fork, preserves the runtime's PyTorch wheel, and verifies `sevenn`'s source path. The preview notebooks fetch `tutorials/colab-bec`; `report.json` records the exact source commit and dependency versions. For exact reproduction, check out that commit and run locally or set `SEVENNET_TUTORIAL_REPO` to its path.
+Choose a Colab runtime and **Run all**, or open either notebook in local Jupyter with PyTorch installed. Setup installs this fork, preserves the runtime's PyTorch wheel, and verifies `sevenn`'s source path. The notebooks fetch `main`; `report.json` records the exact source commit and dependency versions. For exact reproduction, check out that commit and run locally or set `SEVENNET_TUTORIAL_REPO` to its path.
 
-Both tutorials use the public 30-structure ZrO₂ example. The small 16-channel, lmax=2, three-layer model is intended for education. It is not a production potential. The quickstart optimizes only BEC loss; its energy/force outputs must not be used. The advanced notebook fits E/F/S/BEC together. Neither trains dielectric response.
+Both tutorials use the public 30-structure ZrO₂ example. Both models use lmax=2 and three layers: the quickstart has 16 channels; the advanced notebook has 32 on CUDA and 16 on CPU. These compact models are intended for education. It is not a production potential. The quickstart optimizes only BEC loss; its energy/force outputs must not be used. The advanced notebook fits E/F/S/BEC together. Neither trains dielectric response.
 
 See [data attribution and split limitations](../../example_inputs/training_polar/DATA.md), [measured validation](VALIDATION.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
 
@@ -40,13 +40,14 @@ colab exec -s polar-t4 --timeout 1800 -f tutorials/colab/01_bec_quickstart.ipynb
 colab stop -s polar-t4
 ```
 
-Repeat on an A100 for the advanced notebook. Download each run's ZIP before stopping the session (`colab download -s NAME REMOTE_ZIP LOCAL_ZIP`). The CLI uploads code cells, not local helper files; the notebook obtains its helpers by cloning this repository. Release test VMs after use.
+Repeat on an A100 for the advanced notebook. Download each run's ZIP before stopping the session (`colab download -s NAME REMOTE_ZIP LOCAL_ZIP`). Restart an already-used test kernel with `colab restart-kernel -s NAME` first. CLI notebook execution can continue after a cell error: inspect the saved executed notebook for error outputs before accepting a run. The CLI uploads code cells, not local helper files; the notebook obtains its helpers by cloning this repository. Release test VMs after use.
 
 ## Troubleshooting
 
 - Wrong `sevenn` origin: restart the kernel and run setup first. Installing PyPI `sevenn` alone gives upstream SevenNet.
 - Different GPU: follow the detected hardware and record its name; paid subscriptions do not guarantee A100 allocation.
 - Out of memory: set batch size to 1. If FlashTP compilation fails, lower build parallelism from two jobs to one or disable the optional build.
+- FlashTP channels: use multiples of 32 with the pinned kernel; 16-channel models cannot use it. A fresh build took about 8 minutes on A100 and 12 minutes on T4 in our tests.
 - No `nvcc`, failed build, failed forward/backward agreement: continue with standard e3nn. `flash_report.json` records the failure; no speedup is implied.
 - Slow CPU: use fewer epochs for a smoke test or select T4. An incomplete fit should be labeled as such.
 

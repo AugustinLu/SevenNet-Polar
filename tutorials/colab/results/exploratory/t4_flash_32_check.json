@@ -1,0 +1,132 @@
+{
+  "environment": {
+    "python": "3.13.15",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.39",
+    "packages": {
+      "sevenn": "0.12.2.dev0",
+      "torch": "2.11.0+cu130",
+      "e3nn": "0.6.0",
+      "ase": "3.29.0",
+      "numpy": "2.1.3",
+      "matscipy": "1.3.0",
+      "torch-geometric": "2.8.0.post1",
+      "matplotlib": "3.10.0"
+    },
+    "source_commit": "b913210b8c2294ea8248db1ef11ab4a8e10a0370",
+    "source_dirty": true,
+    "sevenn_origin": "sevenn/__init__.py (verified checkout)",
+    "torch_cuda_build": "13.0",
+    "device": "cuda",
+    "precision": "float32 (no autocast)",
+    "gpu": "Tesla T4",
+    "capability": [
+      7,
+      5
+    ],
+    "gpu_memory_bytes": 15637086208,
+    "cuda_compiler": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Wed_Aug_20_01:58:59_PM_PDT_2025\nCuda compilation tools, release 13.0, V13.0.88\nBuild cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx_compiler": "c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+  },
+  "training": {
+    "cli_seconds": 11.83564943500005,
+    "peak_cuda_allocated_bytes": 755538432,
+    "peak_cuda_reserved_bytes": 1581252608,
+    "cpu_threads": 2,
+    "subprocess_wall_seconds": 15.003909377000127
+  },
+  "comparison": {
+    "status": "passed",
+    "output_max_abs_differences": {
+      "inferred_total_energy": 0.0,
+      "inferred_force": 1.1175870895385742e-08,
+      "inferred_stress": 3.4924596548080444e-10,
+      "inferred_born_effective_charges": 2.384185791015625e-07
+    },
+    "gradient_max_abs_difference": 5.960464477539063e-08,
+    "gradient_parameters_checked": 23,
+    "losses": {
+      "e3nn": 35.603485107421875,
+      "FlashTP": 35.603485107421875
+    },
+    "atol_outputs": 0.0001,
+    "atol_gradients": 0.0005,
+    "warmups": 3,
+    "repeats": 10,
+    "batch_size": 1,
+    "measurements": [
+      {
+        "backend": "e3nn",
+        "operation": "forward (E/F/S/B)",
+        "median_seconds": 0.045377465499996106,
+        "samples_seconds": [
+          0.047072283000034076,
+          0.046874695000042266,
+          0.045027836000144816,
+          0.044351224999900296,
+          0.044973751000043194,
+          0.04532695300008527,
+          0.04542186000003312,
+          0.046238909000067,
+          0.04533307099995909,
+          0.05498290199989242
+        ],
+        "peak_allocated_bytes": 386762752
+      },
+      {
+        "backend": "FlashTP",
+        "operation": "forward (E/F/S/B)",
+        "median_seconds": 0.033191569000109666,
+        "samples_seconds": [
+          0.02599236700007168,
+          0.0254347019999841,
+          0.027218497000149,
+          0.02692552999997133,
+          0.02587162399981935,
+          0.047012127000016335,
+          0.052627275999839185,
+          0.06763764700008323,
+          0.03952065699991181,
+          0.03916464100007033
+        ],
+        "peak_allocated_bytes": 97975808
+      },
+      {
+        "backend": "e3nn",
+        "operation": "forward+backward",
+        "median_seconds": 0.15545167650009262,
+        "samples_seconds": [
+          0.17921709799998098,
+          0.1457818750000115,
+          0.14507707699999628,
+          0.14629842699991968,
+          0.1504119629998968,
+          0.15725317800001903,
+          0.1536501750001662,
+          0.16537082199988618,
+          0.16887973200005035,
+          0.1650939369999378
+        ],
+        "peak_allocated_bytes": 689211904
+      },
+      {
+        "backend": "FlashTP",
+        "operation": "forward+backward",
+        "median_seconds": 0.06469294149985672,
+        "samples_seconds": [
+          0.06396949999998469,
+          0.06431441500012625,
+          0.06475493799985088,
+          0.06723111600012999,
+          0.06571271400002843,
+          0.07042251500001839,
+          0.07470328599993081,
+          0.06463094499986255,
+          0.06374966499993207,
+          0.06426429600014671
+        ],
+        "peak_allocated_bytes": 190311424
+      }
+    ],
+    "memory_note": "Both models resident; memory is process-wide, not isolated per backend."
+  }
+}
