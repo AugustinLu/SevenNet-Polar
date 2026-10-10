@@ -1,6 +1,23 @@
 (notebook-tutorial)=
 # Notebook tutorials
 
+## SevenNet-Polar: BEC and multitask training
+
+The Polar notebooks use the public ZrO₂ example, train through the package
+CLI, reload checkpoints through Python, and export held-out parity figures.
+They exclude dielectric prediction.
+
+| Notebook | Google Colab | Runtime |
+|---|---|---|
+| [BEC quickstart](https://github.com/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/01_bec_quickstart.ipynb) | [![Open in Google Colab]](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/01_bec_quickstart.ipynb) | CPU / free T4 |
+| [Multitask E/F/S/BEC](https://github.com/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/02_multitask_a100_flashtp.ipynb) | [![Open in Google Colab]](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/tutorials/colab-bec/tutorials/colab/02_multitask_a100_flashtp.ipynb) | A100 when available, optional FlashTP |
+
+See the [Polar tutorial guide](https://github.com/AugustinLu/SevenNet-Polar/tree/tutorials/colab-bec/tutorials/colab)
+for validation records, dataset attribution, and split limitations. These are
+preview links to the tutorials branch.
+
+## Upstream SevenNet notebooks
+
 If you want to learn how to use the `sevenn` Python library instead of the CLI command, please check out the notebook tutorials below.
 
 Please note that the library is not fully documented and typical use cases can be covered by CLI.
