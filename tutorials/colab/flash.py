@@ -2,11 +2,11 @@
 
 import importlib
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -55,7 +55,8 @@ def install_flash(destination, revision):
                     time.sleep(1)
                     if int(time.perf_counter() - started) % 30 == 0:
                         print(
-                            f'FlashTP setup: {time.perf_counter() - started:.0f} s (full output in {log_path})',
+                            f'FlashTP setup: {time.perf_counter() - started:.0f} s '
+                            f'(full output in {log_path})',
                             flush=True,
                         )
             except BaseException:
@@ -68,7 +69,8 @@ def install_flash(destination, revision):
                     log_path.read_text(errors='replace').splitlines()[-20:]
                 )
                 raise RuntimeError(
-                    f'FlashTP build failed. Keep the standard backend. Log: {log_path}\n{tail}'
+                    'FlashTP build failed. Keep the standard backend. '
+                    f'Log: {log_path}\n{tail}'
                 )
     # Standard model construction imports this helper before the build.
     importlib.invalidate_caches()
@@ -87,12 +89,13 @@ def install_flash(destination, revision):
 
 
 def compare_backends(checkpoint, train_path, batch_size=1, repeats=10):
-    """Compare raw outputs and every parameter gradient, including force/stress loss."""
+    """Compare raw outputs and all gradients, including force/stress loss."""
+    from torch_geometric.loader import DataLoader
+
     import sevenn._keys as KEY
     from sevenn.train.graph_dataset import SevenNetGraphDataset
     from sevenn.train.loss import get_loss_functions_from_config
     from sevenn.util import load_checkpoint
-    from torch_geometric.loader import DataLoader
 
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA GPU required for FlashTP comparison.')
@@ -199,7 +202,7 @@ def compare_backends(checkpoint, train_path, batch_size=1, repeats=10):
                     'peak_allocated_bytes': torch.cuda.max_memory_allocated(),
                 }
             )
-    # Both models resident during microbenchmarks; compare timing, not per-model memory.
+    # Both models are resident; memory is process-wide during microbenchmarks.
     return {
         'status': 'passed',
         'output_max_abs_differences': differences,
@@ -212,5 +215,7 @@ def compare_backends(checkpoint, train_path, batch_size=1, repeats=10):
         'repeats': repeats,
         'batch_size': batch_size,
         'measurements': measurements,
-        'memory_note': 'Both models resident; memory is process-wide, not isolated per backend.',
+        'memory_note': (
+            'Both models resident; memory is process-wide, not per backend.'
+        ),
     }

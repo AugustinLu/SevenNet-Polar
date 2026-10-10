@@ -40,8 +40,9 @@ def test_split_roundtrip_and_config(tmp_path):
         for atoms in read(path, ':'):
             assert support.reference_bec(atoms).shape == (len(atoms), 3, 3)
             assert 'dielectric_tensor' not in atoms.calc.results
-    from sevenn.parse_input import read_config_yaml
     import yaml
+
+    from sevenn.parse_input import read_config_yaml
 
     for multi in [False, True]:
         config = support.make_config(paths, 1, multitask=multi)
@@ -109,6 +110,26 @@ def test_cpu_train_reload_and_evaluate(tmp_path, multitask):
         np.testing.assert_allclose(
             reference, stress[[0, 1, 2, 5, 3, 4]] * 160.21766208, rtol=1e-6
         )
+        curve, convergence = support.learning_curves(
+            tmp_path / 'run', multitask=True
+        )
+        for title, divisor, column in [
+            ('Force', np.sqrt(3), 'validset_Force_RMSE'),
+            ('Stress', 10 * np.sqrt(6), 'validset_Stress_RMSE'),
+        ]:
+            expected = metrics[
+                (metrics.partition == 'Validation') & (metrics.quantity == title)
+            ].RMSE.iloc[0]
+            np.testing.assert_allclose(
+                curve[column].iloc[0] / divisor, expected, rtol=1e-5
+            )
+            axis = next(a for a in convergence.axes if a.get_title() == title)
+            np.testing.assert_allclose(
+                axis.lines[1].get_ydata()[0], expected, rtol=1e-5
+            )
+        import matplotlib.pyplot as plt
+
+        plt.close(convergence)
     assert profile['peak_cuda_allocated_bytes'] is None
     assert inference_profile['cli_seconds'] > 0
     import matplotlib.pyplot as plt

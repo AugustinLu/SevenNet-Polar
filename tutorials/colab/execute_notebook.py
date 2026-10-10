@@ -1,20 +1,21 @@
 """Execute a tutorial with the current Python in an isolated Jupyter kernel.
 
-Usage: python execute_notebook.py NOTEBOOK --output OUTPUT [--epochs 1] [--skip-install]
+Usage: python execute_notebook.py NOTEBOOK --output OUTPUT
+       [--epochs 1] [--skip-install]
 Requires nbformat, nbclient, ipykernel. Outputs go outside the source notebook.
 """
 
 import argparse
 import json
 import os
-from pathlib import Path
 import sys
 import tempfile
+from pathlib import Path
 
 import nbformat
-from nbclient import NotebookClient
 from jupyter_client import KernelManager
 from jupyter_client.kernelspec import KernelSpecManager
+from nbclient import NotebookClient
 
 
 def main():

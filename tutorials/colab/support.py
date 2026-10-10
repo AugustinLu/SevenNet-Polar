@@ -1,16 +1,16 @@
 """Small tutorial utilities; all model training uses SevenNet's CLI and APIs."""
 
-from collections import Counter
 import hashlib
 import importlib.metadata
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 import sys
 import time
 import zipfile
+from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -188,7 +188,10 @@ def prepare_data(repo, destination, seed=42):
         'seed': seed,
         'indices': partitions,
         'geometry_fingerprints': fingerprints,
-        'split_policy': 'composition-stratified random demonstration; trajectory independence unknown',
+        'split_policy': (
+            'composition-stratified random demonstration; '
+            'trajectory independence unknown'
+        ),
     }
     (destination / 'split.json').write_text(json.dumps(manifest, indent=2))
     summary = pd.DataFrame(
@@ -312,14 +315,17 @@ def run_cli(repo, run_dir, name, arguments):
     if process.returncode:
         tail = '\n'.join(log_path.read_text(errors='replace').splitlines()[-30:])
         raise RuntimeError(
-            f'{name} failed (exit {process.returncode}). Full log: {log_path}\n{tail}\n'
-            'For CUDA out of memory, reduce batch_size to 1; for imports, restart and rerun setup.'
+            f'{name} failed (exit {process.returncode}). '
+            f'Full log: {log_path}\n{tail}\n'
+            'For CUDA out of memory, reduce batch_size to 1; '
+            'for imports, restart and rerun setup.'
         )
     result = json.loads(profile_path.read_text())
     result['subprocess_wall_seconds'] = time.perf_counter() - started
     profile_path.write_text(json.dumps(result, indent=2))
     print(
-        f'{name}: completed in {result["subprocess_wall_seconds"]:.1f} s; log: {log_path.name}'
+        f'{name}: completed in {result["subprocess_wall_seconds"]:.1f} s; '
+        f'log: {log_path.name}'
     )
     return result
 
@@ -524,7 +530,7 @@ def learning_curves(run_dir, multitask=False):
         targets += [
             ('Energy_RMSE', 'Energy per atom', 'eV/atom'),
             ('Force_RMSE', 'Force', 'eV/Å'),
-            ('Stress_RMSE', 'Stress', 'kbar'),
+            ('Stress_RMSE', 'Stress', 'GPa'),
             ('TotalLoss', 'Weighted loss', 'weighted units'),
         ]
     fig, axes = plt.subplots(
@@ -540,11 +546,18 @@ def learning_curves(run_dir, multitask=False):
             ]
             if len(columns) != 1:
                 raise ValueError(
-                    f'Missing/ambiguous learning curve column {prefix}_{suffix}: {columns}'
+                    f'Missing/ambiguous curve column {prefix}_{suffix}: {columns}'
                 )
+            # CLI RMSE sums squared vector/tensor components before averaging.
+            # Match the component-weighted parity metrics and stress units.
+            factor = 1.0
+            if suffix == 'Force_RMSE':
+                factor = 1 / np.sqrt(3)
+            elif suffix == 'Stress_RMSE':
+                factor = 1 / (10 * np.sqrt(6))
             ax.plot(
                 curve.epoch,
-                curve[columns[0]],
+                curve[columns[0]] * factor,
                 label=partition,
                 color=COLORS[partition],
             )
@@ -577,6 +590,11 @@ def export_artifacts(run_dir, data_dir, report):
     (run_dir / 'report.json').write_text(json.dumps(report, indent=2))
     archive = run_dir.parent / (run_dir.name + '.zip')
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+        attribution = (
+            Path(__file__).resolve().parents[2]
+            / 'example_inputs/training_polar/DATA.md'
+        )
+        z.write(attribution, 'data/ATTRIBUTION.md')
         for p in run_dir.rglob('*'):
             if (
                 p.is_file()
