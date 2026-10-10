@@ -84,3 +84,13 @@ def test_asr_max_ddp_uses_maximum_reduction():
         value._ddp_reduce('cpu')
     assert value.get() == 7
     assert value._count == 3
+
+
+def test_monitor_does_not_change_predictions_or_random_state():
+    data = output([[[1, 0, 0], [0, 2, 0], [0, 0, -4]]], [1])
+    prediction = data[KEY.PRED_BORN_EFFECTIVE_CHARGES].clone()
+    random_state = torch.random.get_rng_state().clone()
+    metric = BECASRMaxError(**get_err_type('BornEffectiveCharges'))
+    metric.update(data)
+    assert torch.equal(random_state, torch.random.get_rng_state())
+    assert torch.equal(prediction, data[KEY.PRED_BORN_EFFECTIVE_CHARGES])

@@ -22,7 +22,7 @@ jobs:
           uv pip install torch --index-url https://download.pytorch.org/whl/cpu --system
           uv pip install -e '.[test]' matplotlib nbformat nbclient ipykernel --system
       - name: Tutorial and BEC inference regressions
-        run: python -m pytest tests/tutorials tests/unit_tests/test_bec_inference.py -q
+        run: python -m pytest tests/tutorials tests/unit_tests/test_bec_inference.py tests/unit_tests/test_bec_asr.py -q
       - name: Execute both notebooks (one epoch smoke test)
         run: |
           python tutorials/colab/execute_notebook.py tutorials/colab/01_bec_quickstart.ipynb --output /tmp/polar-validation/quickstart.ipynb --epochs 1 --skip-install

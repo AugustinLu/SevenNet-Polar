@@ -5,11 +5,11 @@
 | [BEC quickstart](01_bec_quickstart.ipynb) | CPU or free T4; standard e3nn | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/01_bec_quickstart.ipynb) |
 | [Multitask E/F/S/BEC](02_multitask_a100_flashtp.ipynb) | A100 when available; standard path with optional FlashTP comparison | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AugustinLu/SevenNet-Polar/blob/main/tutorials/colab/02_multitask_a100_flashtp.ipynb) |
 
-Choose a Colab runtime and **Run all**, or open either notebook in local Jupyter with PyTorch installed. Setup installs this fork, preserves the runtime's PyTorch wheel, and verifies `sevenn`'s source path. The notebooks fetch `main`; `report.json` records the exact source commit and dependency versions. For exact reproduction, check out that commit and run locally or set `SEVENNET_TUTORIAL_REPO` to its path.
+Choose a Colab runtime and **Run all**, or open either notebook in local Jupyter with PyTorch installed. Setup installs this fork, preserves the runtime's PyTorch wheel, and verifies `sevenn`'s source path. The notebooks fetch `main`; `report.json` records the exact source commit and dependency versions. For exact reproduction, check out that commit and run locally or set `SEVENNET_TUTORIAL_REPO` to its path. `SEVENNET_TUTORIAL_REF` selects a remote branch during development; use a fresh kernel to avoid reusing an older checkout.
 
-Both tutorials use the public 30-structure ZrO₂ example. Both models use lmax=2 and three layers: the quickstart has 16 channels; the advanced notebook has 32 on CUDA and 16 on CPU. These compact models are intended for education. It is not a production potential. The quickstart optimizes only BEC loss; its energy/force outputs must not be used. The advanced notebook fits E/F/S/BEC together. Neither trains dielectric response.
+Both tutorials use 50 training + 20 validation + 20 test structures from the official Li₃PO₄ dataset. Both models use lmax=2, four layers, batch size 4 and 100 epochs: the quickstart has 16 channels; the advanced notebook has 32 on CUDA and 16 on CPU. These compact models are intended for education. It is not a production potential. The quickstart optimizes only BEC loss; its energy/force outputs must not be used. The advanced notebook fits E/F/S/BEC together. Neither trains dielectric response.
 
-See [data attribution and split limitations](../../example_inputs/training_polar/DATA.md), [measured validation](VALIDATION.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
+See [data attribution and split limitations](../../example_inputs/tutorial_polar/DATA.md), [measured validation](VALIDATION.md), and the repository's [citation information](../../README.md#citation). Please cite the SevenNet-Polar paper and dataset, upstream SevenNet, and FlashTP when used.
 
 ## What each run saves
 
@@ -51,4 +51,31 @@ Repeat on an A100 for the advanced notebook. Download each run's ZIP before stop
 - No `nvcc`, failed build, failed forward/backward agreement: continue with standard e3nn. `flash_report.json` records the failure; no speedup is implied.
 - Slow CPU: use fewer epochs for a smoke test or select T4. An incomplete fit should be labeled as such.
 
-The notebooks retain the CLI's established loss definitions and normalization. Changes for tutorial support are restricted to preserving BEC predictions during batched CLI inference and converting the BEC head's irreps to Cartesian CSV columns, with regression coverage.
+## Monitoring the raw tensor sum
+
+Both notebooks request `BornEffectiveCharges_ASRMax` and `BornEffectiveCharges_ASRMean` in the epoch CSV and convergence plots. For each cell the diagnostic is `max_ab |sum_i Z*_{i,ab}|`; the logger then takes the maximum or mean over cells. It keeps graph boundaries intact even with unequal atom counts in a batch. It converts the model's irreps to Cartesian tensors and sums in float64. These metrics do not change the loss, checkpoint selection, or predictions.
+
+Validation evaluates one fixed model state per epoch. Training aggregates predictions while optimizer weights change, so its epoch metric need not match inference with the final checkpoint. The dotted validation-reference lines show the label baseline. A nonzero reference sum is retained rather than silently corrected. The post-inference `asr.csv` additionally includes atom counts, atom-normalized residuals, and prediction-minus-reference tensor sums.
+
+To monitor another BEC training run, append these entries to its existing `train.error_record`:
+
+```yaml
+- ['BornEffectiveCharges', 'ASRMean']
+- ['BornEffectiveCharges', 'ASRMax']
+```
+
+The notebooks retain the CLI's established loss definitions and normalization. Tutorial support preserves BEC predictions during batched inference, converts irreps to Cartesian CSV columns, and adds raw tensor-sum diagnostics, with regression coverage.
+
+## Reproduce the bounded subset comparison
+
+The bundled pools contain only 240 structures per material: a nested reservoir of 200 training structures and fixed 20/20 validation/test sets. Original source IDs, checksums and composition-balanced selection are saved in the manifests. No full-dataset training is needed. Li₁₁O₁₆P₄ reference tensor sums are approximately 1 e; these labels are retained, and `sum_error_max_abs_e` measures agreement with their tensor sums.
+
+Use a fresh output directory for each configuration. This command runs the production CLI and compares **training and validation only**, leaving the test set unused:
+
+```bash
+python tutorials/colab/subset_experiment.py --dataset li3po4 --sizes 20 30 50 100 200 --epochs 100 --channels 32 --layers 4 --batch-size 4 --output /tmp/polar-li-subsets
+```
+
+Use `--multitask` for E/F/S/BEC, or `--dataset zro2` for ZrO₂. Each size saves its exact configuration, timings, fixed split, validation errors, tensor-sum diagnostics and checkpoint archive. `summary.csv` collects the comparison. Runs are single-seed observations; larger subsets do not guarantee smaller worst-case sum errors.
+
+For notebook customization, set `DATASET` and `TRAINING_STRUCTURES` in the data cell, or the environment variables `SEVENNET_TUTORIAL_DATASET` and `SEVENNET_TUTORIAL_TRAINING_STRUCTURES` before execution. The 20 validation and 20 test frames remain fixed. One epoch checks installation and execution; it does not reproduce the fitted model's accuracy.
