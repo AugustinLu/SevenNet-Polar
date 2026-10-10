@@ -88,6 +88,7 @@ def main():
         flash_report = {'requested': args.flash}
         if args.flash:
             import importlib.metadata
+
             import flash
 
             flash_report.update(

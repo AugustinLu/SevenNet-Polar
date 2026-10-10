@@ -1,7 +1,7 @@
 """Integrity and scientific plumbing for the BEC tutorials."""
 
-import importlib.util
 import hashlib
+import importlib.util
 import json
 import shutil
 from pathlib import Path
