@@ -26,3 +26,8 @@ sevenn_data/
 loss_evolution.png
 bec_parity_plot.png
 checkpoint_best.pth
+
+# Local tutorial outputs (not the release validation records)
+polar-tutorial-*/
+*_output.ipynb
+.pytest_cache/

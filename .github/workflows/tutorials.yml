@@ -1,0 +1,34 @@
+name: BEC tutorial smoke tests
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  cpu-notebooks:
+    runs-on: ubuntu-latest
+    env:
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      SEVENNET_TUTORIAL_THREADS: '2'
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install CPU environment
+        run: |
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu --system
+          uv pip install -e '.[test]' matplotlib nbformat nbclient ipykernel --system
+      - name: Tutorial and BEC inference regressions
+        run: python -m pytest tests/tutorials tests/unit_tests/test_bec_inference.py tests/unit_tests/test_bec_asr.py -q
+      - name: Execute both notebooks (one epoch smoke test)
+        run: |
+          python tutorials/colab/execute_notebook.py tutorials/colab/01_bec_quickstart.ipynb --output /tmp/polar-validation/quickstart.ipynb --epochs 1 --skip-install
+          python tutorials/colab/execute_notebook.py tutorials/colab/02_multitask_a100_flashtp.ipynb --output /tmp/polar-validation/multitask.ipynb --epochs 1 --skip-install --flash off
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpu-notebook-smoke
+          path: /tmp/polar-validation

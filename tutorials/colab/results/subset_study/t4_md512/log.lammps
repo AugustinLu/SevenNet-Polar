@@ -1,0 +1,172 @@
+LAMMPS (2 Aug 2023 - Update 3)
+  using 2 OpenMP thread(s) per MPI task
+units metal
+atom_style atomic
+boundary p p p
+read_data initial.data
+Reading data file ...
+  orthogonal box = (0 0 0) to (10.0025 12.353714 42.460096)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  512 atoms
+  read_data CPU = 0.002 seconds
+pair_style e3gnn
+PairE3GNN using device : CUDA
+pair_coeff * * model.pt efield 0.0 0.0 0.001 Li O P
+e3gnn: efield = (0, 0, 0.001) V/A, enforce_asr yes, no field virial
+Chemical specie 'Li' is assigned to type 1
+Chemical specie 'O' is assigned to type 2
+Chemical specie 'P' is assigned to type 3
+from sevenn version '0.12.2.dev0' single precision model, deployed: 2026-10-10
+FlashTP: no
+OEQ: no
+neighbor 1.0 bin
+neigh_modify every 1 delay 0 check yes
+thermo 10
+thermo_style custom step time temp pe etotal press
+run 0
+WARNING: No fixes with time integration, atoms won't move (src/verlet.cpp:60)
+Generated 0 of 3 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update: every = 1 steps, delay = 0 steps, check = yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 7
+  ghost atom cutoff = 7
+  binsize = 3.5, bins = 3 4 13
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair e3gnn, perpetual
+      attributes: full, newton on
+      pair build: full/bin/atomonly
+      stencil: full/bin/3d
+      bin: standard
+Latest MD Step: 0
+Atom 1 BEC Tensor (e):
+[[  1.07792825   0.11578776  -0.07451096]
+ [  0.03165222   0.98855700  -0.09901896]
+ [ -0.00633198   0.02078687   1.12740832]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [-0.00000633  0.00002079  0.00112741]
+
+Latest MD Step: 0
+Atom 2 BEC Tensor (e):
+[[  1.04655427  -0.06135271  -0.04967905]
+ [  0.06714105   0.93442041   0.06325771]
+ [  0.02502823  -0.04187390   1.09137296]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [ 0.00002503 -0.00004187  0.00109137]
+
+Latest MD Step: 0
+Atom 3 BEC Tensor (e):
+[[  1.08905127   0.00402657  -0.07382674]
+ [ -0.01214587   1.17189022   0.00516169]
+ [  0.02736046  -0.01802652   0.87961837]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [ 0.00002736 -0.00001803  0.00087962]
+
+Per MPI rank memory allocation (min/avg/max) = 4.059 | 4.059 | 4.059 Mbytes
+   Step          Time           Temp          PotEng         TotEng         Press
+         0   0              0             -3179.8999     -3179.8999      34927.176
+Loop time of 1.169e-06 on 2 procs for 0 steps with 512 atoms
+
+171.1% CPU use with 1 MPI tasks x 2 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 1.169e-06  |            |       |100.00
+
+Nlocal:            512 ave         512 max         512 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:           3108 ave        3108 max        3108 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:              0 ave           0 max           0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:        72224 ave       72224 max       72224 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 72224
+Ave neighs/atom = 141.0625
+Neighbor list builds = 0
+Dangerous builds = 0
+write_dump all custom field.dump id type x y z fx fy fz modify sort id
+velocity all create 100.0 42 mom yes rot no dist gaussian
+timestep 0.00025
+fix thermostat all nvt temp 100.0 100.0 0.05
+dump trajectory all custom 10 trajectory.dump id type x y z vx vy vz fx fy fz
+dump_modify trajectory sort id
+run 100
+Generated 0 of 3 mixed pair_coeff terms from geometric mixing rule
+Latest MD Step: 0
+Atom 1 BEC Tensor (e):
+[[  1.07792823   0.11578778  -0.07451098]
+ [  0.03165222   0.98855700  -0.09901896]
+ [ -0.00633197   0.02078688   1.12740833]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [-0.00000633  0.00002079  0.00112741]
+
+Latest MD Step: 0
+Atom 2 BEC Tensor (e):
+[[  1.04655440  -0.06135272  -0.04967907]
+ [  0.06714104   0.93442054   0.06325773]
+ [  0.02502823  -0.04187388   1.09137310]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [ 0.00002503 -0.00004187  0.00109137]
+
+Latest MD Step: 0
+Atom 3 BEC Tensor (e):
+[[  1.08905127   0.00402656  -0.07382674]
+ [ -0.01214587   1.17189021   0.00516169]
+ [  0.02736047  -0.01802652   0.87961835]]
+Applied E-Field (V/A): [0  0  0.001]
+Resulting F_elec (eV/A): [ 0.00002736 -0.00001803  0.00087962]
+
+Per MPI rank memory allocation (min/avg/max) = 4.059 | 4.059 | 4.059 Mbytes
+   Step          Time           Temp          PotEng         TotEng         Press
+         0   0              100           -3179.8999     -3173.2947      36271.883
+        10   0.0025         105.93677     -3180.292      -3173.2947      35179.219
+        20   0.005          123.13189     -3181.4304     -3173.2973      33135.357
+        30   0.0075         144.43951     -3182.8516     -3173.3111      30697.038
+        40   0.01           163.62649     -3184.1575     -3173.3496      28391.062
+        50   0.0125         178.17655     -3185.1968     -3173.4279      26502.637
+        60   0.015          188.74625     -3186.0239     -3173.5569      25042.19
+        70   0.0175         196.9979      -3186.7515     -3173.7394      23880.6
+        80   0.02           203.61548     -3187.4138     -3173.9646      22950.33
+        90   0.0225         207.07533     -3187.8857     -3174.208       22369.872
+       100   0.025          204.27588     -3187.9365     -3174.4437      22379.917
+Loop time of 32.3926 on 2 procs for 100 steps with 512 atoms
+
+Performance: 0.067 ns/day, 359.917 hours/ns, 3.087 timesteps/s, 1.581 katom-step/s
+85.4% CPU use with 1 MPI tasks x 2 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 32.369     | 32.369     | 32.369     |   0.0 | 99.93
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.0036592  | 0.0036592  | 0.0036592  |   0.0 |  0.01
+Output  | 0.016338   | 0.016338   | 0.016338   |   0.0 |  0.05
+Modify  | 0.0022133  | 0.0022133  | 0.0022133  |   0.0 |  0.01
+Other   |            | 0.0008795  |            |       |  0.00
+
+Nlocal:            512 ave         512 max         512 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:           3108 ave        3108 max        3108 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:              0 ave           0 max           0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+FullNghs:        72224 ave       72224 max       72224 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 72224
+Ave neighs/atom = 141.0625
+Neighbor list builds = 0
+Dangerous builds = 0
+write_data final.data
+System init for write_data ...
+Generated 0 of 3 mixed pair_coeff terms from geometric mixing rule
+Total wall time: 0:00:33

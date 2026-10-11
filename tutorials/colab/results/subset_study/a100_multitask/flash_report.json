@@ -1,0 +1,122 @@
+{
+  "status": "passed",
+  "installation": {
+    "status": "built",
+    "source_revision": "d52e41454afc9636cd51757b65df44e7bcdca178",
+    "cuda_arch": "80",
+    "max_jobs": 2,
+    "fetch_seconds": 2.0018831639999917,
+    "build_install_seconds": 503.08392636400004
+  },
+  "comparison": {
+    "status": "passed",
+    "output_max_abs_differences": {
+      "inferred_total_energy": 3.0517578125e-05,
+      "inferred_force": 3.814697265625e-06,
+      "inferred_stress": 2.9802322387695312e-08,
+      "inferred_born_effective_charges": 9.5367431640625e-07
+    },
+    "gradient_max_abs_difference": 9.723007678985596e-07,
+    "gradient_parameters_checked": 29,
+    "losses": {
+      "e3nn": 0.02840423583984375,
+      "FlashTP": 0.028404247015714645
+    },
+    "atol_outputs": 0.0001,
+    "atol_gradients": 0.0005,
+    "warmups": 3,
+    "repeats": 10,
+    "batch_size": 4,
+    "measurements": [
+      {
+        "backend": "e3nn",
+        "operation": "forward (E/F/S/B)",
+        "median_seconds": 0.055936876500254584,
+        "samples_seconds": [
+          0.056441499999891676,
+          0.05541280000034021,
+          0.05627335899953323,
+          0.05536482200022874,
+          0.055226227000275685,
+          0.05561714099985693,
+          0.055945572000382526,
+          0.056058677000692114,
+          0.05592818100012664,
+          0.05620413499946153
+        ],
+        "peak_allocated_bytes": 896102912
+      },
+      {
+        "backend": "FlashTP",
+        "operation": "forward (E/F/S/B)",
+        "median_seconds": 0.0349585220001245,
+        "samples_seconds": [
+          0.03528921299948706,
+          0.034770100000059756,
+          0.03503576700040867,
+          0.03488127699984034,
+          0.03474514400022599,
+          0.04091191000043182,
+          0.04031083599966223,
+          0.03943961799996032,
+          0.03459900699999707,
+          0.03447847400002502
+        ],
+        "peak_allocated_bytes": 201133568
+      },
+      {
+        "backend": "e3nn",
+        "operation": "forward+backward",
+        "median_seconds": 0.13711212000043815,
+        "samples_seconds": [
+          0.1371782530004566,
+          0.13906578800015268,
+          0.1375973710000835,
+          0.1370459870004197,
+          0.13984774199980166,
+          0.13778459900004236,
+          0.13520447699920624,
+          0.1369349249998777,
+          0.13617713900021045,
+          0.1366669440003534
+        ],
+        "peak_allocated_bytes": 1718050816
+      },
+      {
+        "backend": "FlashTP",
+        "operation": "forward+backward",
+        "median_seconds": 0.08494531550013562,
+        "samples_seconds": [
+          0.08530013099971256,
+          0.08517368800039549,
+          0.08443690900003276,
+          0.08471694299987576,
+          0.08441993499945966,
+          0.08459496800060151,
+          0.08406701199965028,
+          0.08880543899977056,
+          0.0900070150000829,
+          0.08726296999975602
+        ],
+        "peak_allocated_bytes": 439496704
+      }
+    ],
+    "memory_note": "Both models resident; memory is process-wide, not per backend."
+  },
+  "training": {
+    "e3nn": {
+      "cli_seconds": 21.02891043300042,
+      "peak_cuda_allocated_bytes": 2333887488,
+      "peak_cuda_reserved_bytes": 3206545408,
+      "cpu_threads": 2,
+      "subprocess_wall_seconds": 24.004644665999876
+    },
+    "FlashTP": {
+      "cli_seconds": 16.813108500999988,
+      "peak_cuda_allocated_bytes": 591873024,
+      "peak_cuda_reserved_bytes": 830472192,
+      "cpu_threads": 2,
+      "subprocess_wall_seconds": 20.003633057000116
+    }
+  }
+}

@@ -1,0 +1,228 @@
+{
+  "note": "Previous mixed-pool BEC32 checkpoints, unchanged; CPU reload on the ten shared neutral validation frames only. Model environments differ from new Mosso runs. Test not evaluated.",
+  "source_commit": "a8018ed65aaa4535c2a17ac429c9e63bbfc79680",
+  "validation_source_ids": [
+    7191,
+    5837,
+    7508,
+    4612,
+    2401,
+    8536,
+    923,
+    8311,
+    4626,
+    9649
+  ],
+  "runs": [
+    {
+      "training_structures": 30,
+      "validation_structures": 10,
+      "BEC diagonal RMSE e": 0.0968928574650569,
+      "BEC off-diagonal RMSE e": 0.06543174632566569,
+      "sum_error_max_abs_e": 3.416716038785398,
+      "sum_error_median_e": 1.3345690965652477,
+      "frames": [
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.449437141418457,
+          "sum_error_max_abs_e": 1.4494371514184587
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.3460381031036377,
+          "sum_error_max_abs_e": 0.34603811310363763
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.8715226650238037,
+          "sum_error_max_abs_e": 0.8715226750238048
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.7028861045837402,
+          "sum_error_max_abs_e": 0.7028861145837402
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.2668991088867188,
+          "sum_error_max_abs_e": 1.2668991088867188
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 3.4167160987854004,
+          "sum_error_max_abs_e": 3.416716038785398
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.0665719509124756,
+          "sum_error_max_abs_e": 1.0665719609124769
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.8624722957611084,
+          "sum_error_max_abs_e": 1.8624723157611087
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.531749963760376,
+          "sum_error_max_abs_e": 1.5317499837603785
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.4022390842437744,
+          "sum_error_max_abs_e": 1.4022390842437766
+        }
+      ]
+    },
+    {
+      "training_structures": 50,
+      "validation_structures": 10,
+      "BEC diagonal RMSE e": 0.08314837429138118,
+      "BEC off-diagonal RMSE e": 0.053305079115059745,
+      "sum_error_max_abs_e": 2.5771548148016334,
+      "sum_error_median_e": 1.060521741839906,
+      "frames": [
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.0006470680236816,
+          "sum_error_max_abs_e": 1.0006470780236834
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.6054286956787109,
+          "sum_error_max_abs_e": 0.6054287056787109
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.090583086013794,
+          "sum_error_max_abs_e": 1.090583096013795
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.9807562828063965,
+          "sum_error_max_abs_e": 0.9807562928063969
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.8928866386413574,
+          "sum_error_max_abs_e": 0.8928866386413574
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 2.5771548748016357,
+          "sum_error_max_abs_e": 2.5771548148016334
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.0304603576660156,
+          "sum_error_max_abs_e": 1.0304603876660172
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 2.102926731109619,
+          "sum_error_max_abs_e": 2.1029267511096195
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.5944294929504395,
+          "sum_error_max_abs_e": 1.594429512950442
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.7237310409545898,
+          "sum_error_max_abs_e": 1.723731040954592
+        }
+      ]
+    },
+    {
+      "training_structures": 100,
+      "validation_structures": 10,
+      "BEC diagonal RMSE e": 0.06705899613245352,
+      "BEC off-diagonal RMSE e": 0.04327694889981457,
+      "sum_error_max_abs_e": 2.4929721455438236,
+      "sum_error_median_e": 1.4526940384182732,
+      "frames": [
+        {
+          "source_id": 7191,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.1091136932373047,
+          "sum_error_max_abs_e": 1.1091137032373064
+        },
+        {
+          "source_id": 5837,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.1809988021850586,
+          "sum_error_max_abs_e": 1.1809987921850584
+        },
+        {
+          "source_id": 7508,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 0.4452970027923584,
+          "sum_error_max_abs_e": 0.44529701279235945
+        },
+        {
+          "source_id": 4612,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.1205637454986572,
+          "sum_error_max_abs_e": 1.1205637554986576
+        },
+        {
+          "source_id": 2401,
+          "formula": "O32Zr16",
+          "max_abs_sum_e": 1.0890483856201172,
+          "sum_error_max_abs_e": 1.0890484056201166
+        },
+        {
+          "source_id": 8536,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 2.4929721355438232,
+          "sum_error_max_abs_e": 2.4929721455438236
+        },
+        {
+          "source_id": 923,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.7764441967010498,
+          "sum_error_max_abs_e": 1.7764442267010514
+        },
+        {
+          "source_id": 8311,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.9913601875305176,
+          "sum_error_max_abs_e": 1.9913601775305172
+        },
+        {
+          "source_id": 4626,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.7310562133789062,
+          "sum_error_max_abs_e": 1.7310561833789064
+        },
+        {
+          "source_id": 9649,
+          "formula": "O64Zr32",
+          "max_abs_sum_e": 1.7243893146514893,
+          "sum_error_max_abs_e": 1.7243892846514877
+        }
+      ]
+    }
+  ]
+}

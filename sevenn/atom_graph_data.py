@@ -54,6 +54,8 @@ class AtomGraphData(torch_geometric.data.Data):
             KEY.POS,
             KEY.FORCE,
             KEY.PRED_FORCE,
+            KEY.BORN_EFFECTIVE_CHARGES,
+            KEY.PRED_BORN_EFFECTIVE_CHARGES,
         ]
         natoms = self.num_atoms.item()
         for k, v in self.items():
