@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 Field forces change: re-examine field runs made with earlier versions (see "Fixed").
 
 ### Fixed
+- **`pair_style e3gnn/parallel` aborted with CUDA-aware MPI and `-screen none`.** The
+  communication device was set only on ranks with a screen or log file, so ranks > 0 kept it on
+  the CPU and stopped in `index_select` ("Expected all tensors to be on the same device").
+  It is now set on every rank. Results are unchanged where runs succeeded.
 - **LAMMPS field force was transposed** (`pair_style e3gnn` and `e3gnn/parallel`). The BEC
   convention is Z\*_ab = ∂P_a/∂r_b (field index first; model and DFT labels), so the force is
   F = Z\*ᵀE. The pair styles applied Z\*E, which gives wrong components transverse to the field

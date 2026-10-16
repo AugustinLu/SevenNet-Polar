@@ -129,13 +129,15 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
       use_cuda_mpi = false;
   }
 
+  // Set on every rank. Ranks without screen and logfile (all ranks > 0 under
+  // "-screen none") would otherwise keep device_comm = CPU while use_cuda_mpi
+  // is true, and abort in index_select (CPU x_comm, CUDA index tensors).
+  device_comm = (use_gpu && !use_cuda_mpi) ? torch::Device(torch::kCPU) : device;
+
   if (lmp->screen) {
     if (use_gpu && !use_cuda_mpi) {
-      device_comm = torch::kCPU;
       fprintf(lmp->screen,
               "cuda-aware mpi not found, communicate via host device\n");
-    } else {
-      device_comm = device;
     }
     fprintf(lmp->screen, "PairE3GNNParallel using device : %s\n",
             device_name.c_str());
@@ -144,11 +146,8 @@ PairE3GNNParallel::PairE3GNNParallel(LAMMPS *lmp) : Pair(lmp) {
   }
   if (lmp->logfile) {
     if (use_gpu && !use_cuda_mpi) {
-      device_comm = torch::kCPU;
       fprintf(lmp->logfile,
               "cuda-aware mpi not found, communicate via host device\n");
-    } else {
-      device_comm = device;
     }
     fprintf(lmp->logfile, "PairE3GNNParallel using device : %s\n",
             device_name.c_str());
