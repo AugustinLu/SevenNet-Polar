@@ -259,3 +259,96 @@ def test_calculator(tmp_path):
     atoms2.calc = calc2
 
     assert_atoms(atoms, atoms2)
+
+
+def _no_flash(monkeypatch):
+    import sevenn.nn.flash_helper as flash_helper
+
+    monkeypatch.setattr(flash_helper, 'is_flash_available', lambda: False)
+
+
+def _e3nn_only_key(k):
+    # buffers / empty weights of the e3nn convolution that FlashTP has not
+    return '.convolution.' in k and (
+        k.endswith('.weight') and '.weight_nn.' not in k
+        or k.endswith('.output_mask')
+        or '._compiled_main_left_right.' in k
+    )
+
+
+@pytest.mark.filterwarnings('ignore:.*is not found from.*')
+def test_flash_checkpoint_default_load_without_flash_cpu(tmp_path, monkeypatch):
+    # A checkpoint saved with use_flash_tp, loaded where FlashTP is unavailable
+    # with the backend left to the checkpoint (enable_flash=None, as in
+    # `sevenn inference`), must fall back to e3nn instead of failing the strict
+    # state-dict load. The FlashTP state dict is mimicked on CPU by dropping
+    # the e3nn-only convolution keys.
+    _no_flash(monkeypatch)
+    torch.manual_seed(123)
+    cfg = get_model_config()
+    cfg['use_flash_tp'] = False
+    model_from = build_E3_equivariant_model(cfg, parallel=False)
+    state_dict = {
+        k: v for k, v in model_from.state_dict().items() if not _e3nn_only_key(k)
+    }
+    assert len(state_dict) < len(model_from.state_dict())
+
+    cfg = get_model_config()
+    cfg.update({'use_flash_tp': True, 'version': sevenn.__version__})
+    torch.save(
+        {'model_state_dict': state_dict, 'config': cfg}, tmp_path / 'cp.pth'
+    )
+    with pytest.warns(UserWarning, match='Fallback to e3nn'):
+        model_to, _ = model_from_checkpoint(str(tmp_path / 'cp.pth'))
+
+    model_from.set_is_batch_data(False)
+    model_to.set_is_batch_data(False)
+    from_out = model_from(_graph.clone())
+    to_out = model_to(_graph.clone())
+    assert torch.allclose(
+        from_out.inferred_total_energy, to_out.inferred_total_energy
+    )
+    assert torch.allclose(from_out.inferred_force, to_out.inferred_force, atol=1e-6)
+
+
+@pytest.mark.filterwarnings('ignore:.*is not found from.*')
+def test_flash_lammps_deploy_without_flash_raises(tmp_path, monkeypatch):
+    _no_flash(monkeypatch)
+    cfg = get_model_config()
+    cfg['use_flash_tp'] = False
+    model = build_E3_equivariant_model(cfg, parallel=False)
+    cfg.update({'use_flash_tp': True, 'version': sevenn.__version__})
+    torch.save(
+        {'model_state_dict': model.state_dict(), 'config': cfg},
+        tmp_path / 'cp.pth',
+    )
+    cp = sevenn.util.load_checkpoint(str(tmp_path / 'cp.pth'))
+    with pytest.raises(ImportError, match='FlashTP deployment'):
+        cp.build_model(enable_flash=True, _flash_lammps=True)
+
+
+@pytest.mark.filterwarnings('ignore:.*is not found from.*')
+@pytest.mark.skipif(not is_flash_available(), reason='flash not available')
+def test_flash_checkpoint_default_load_flash_unavailable(tmp_path, monkeypatch):
+    # The same with a real FlashTP state dict
+    torch.manual_seed(123)
+    model_from = get_model(use_flash=True)
+    cfg = get_model_config()
+    cfg.update({'use_flash_tp': True, 'version': sevenn.__version__})
+    torch.save(
+        {'model_state_dict': model_from.state_dict(), 'config': cfg},
+        tmp_path / 'cp.pth',
+    )
+    _no_flash(monkeypatch)
+    with pytest.warns(UserWarning, match='Fallback to e3nn'):
+        model_to, _ = model_from_checkpoint(str(tmp_path / 'cp.pth'))
+    model_to.to('cuda')
+
+    model_from.set_is_batch_data(True)
+    model_to.set_is_batch_data(True)
+    from_out = model_from(get_graphs(batched=True))
+    to_out = model_to(get_graphs(batched=True))
+    assert torch.allclose(
+        from_out.inferred_total_energy, to_out.inferred_total_energy
+    )
+    assert torch.allclose(from_out.inferred_force, to_out.inferred_force, atol=1e-5)

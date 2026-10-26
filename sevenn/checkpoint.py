@@ -328,6 +328,22 @@ class SevenNetCheckpoint:
 
         cp_using_flash = self.config.get(KEY.USE_FLASH_TP, False)
         enable_flash = cp_using_flash if enable_flash is None else enable_flash
+        if enable_flash:
+            import sevenn.nn.flash_helper as flash_helper
+
+            if not flash_helper.is_flash_available():
+                if _flash_lammps:
+                    raise ImportError(
+                        'FlashTP deployment requires flashTP and a GPU'
+                    )
+                # model_build would fall back to e3nn, whose convolution has
+                # buffers (w3j, output_mask) that a FlashTP state dict lacks:
+                # convert the backend instead of loading the state dict as is.
+                warnings.warn(
+                    'FlashTP is requested, but the package is not installed '
+                    + 'or GPU not available. Fallback to e3nn.'
+                )
+                enable_flash = False
 
         cp_using_oeq = self.config.get(KEY.USE_OEQ, False)
         enable_oeq = cp_using_oeq if enable_oeq is None else enable_oeq

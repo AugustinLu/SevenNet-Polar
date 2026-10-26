@@ -19,6 +19,13 @@ Field forces change: re-examine field runs made with earlier versions (see "Fixe
   logging, `sevenn_inference`), so ε∞ was trained and logged as sum/(N+1) while ASE and LAMMPS
   used sum/N. Models trained with `is_train_dielectric` should be retrained if ε∞ is needed.
   Energy, force, stress and BEC readouts are unaffected.
+- **FlashTP checkpoints could not be loaded without FlashTP** (CPU-only machines, or no
+  `flashTP_e3nn`) when the backend was left to the checkpoint, as in `sevenn inference`,
+  `model_from_checkpoint` and continued training: the model fell back to e3nn and the strict
+  state-dict load failed on the e3nn convolution buffers (`output_mask`, w3j) that a FlashTP
+  state dict does not have. The backend is now converted to e3nn, with a warning; predictions
+  equal the FlashTP ones. Deploying a FlashTP model for LAMMPS without FlashTP now raises a clear
+  `ImportError`. Passing `enable_flash=False` explicitly (e.g. the ASE calculator) already worked.
 - **`sevenn inference` did not write the predicted BEC.** The `per_atom.csv` column held only
   "-", because the batched prediction was not split per structure. The predicted BEC is now
   written as Cartesian components (xx … zz, field index first, as the ASE calculator returns
