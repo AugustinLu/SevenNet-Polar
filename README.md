@@ -167,6 +167,8 @@ pair_coeff     * * model.pt efield 0.0 0.0 0.01 enforce_asr yes Zr O
 
 The same field force and `enforce_asr` are available from ASE via `sevenn.calculator.FieldCalculator`, for users who prefer to drive MD from ASE rather than LAMMPS.
 
+For batch evaluation, `sevenn inference` writes the raw predicted BEC by default. Add `--enforce_asr` to subtract the mean predicted BEC of each structure before the errors and `per_atom.csv` are written (Σ_i Z\*_i = 0 for every structure). Leave it off for charged cells, where Σ_i Z\*_i = Q·I.
+
 ## Citation
 
 

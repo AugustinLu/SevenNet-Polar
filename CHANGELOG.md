@@ -19,12 +19,20 @@ Field forces change: re-examine field runs made with earlier versions (see "Fixe
   logging, `sevenn_inference`), so ε∞ was trained and logged as sum/(N+1) while ASE and LAMMPS
   used sum/N. Models trained with `is_train_dielectric` should be retrained if ε∞ is needed.
   Energy, force, stress and BEC readouts are unaffected.
+- **`sevenn inference` did not write the predicted BEC.** The `per_atom.csv` column held only
+  "-", because the batched prediction was not split per structure. The predicted BEC is now
+  written as Cartesian components (xx … zz, field index first, as the ASE calculator returns
+  it), and `errors.txt` reports the diagonal and off-diagonal BEC RMSE when the model predicts
+  BEC (unlabeled structures are skipped).
 
 ### Added
 - `enforce_asr [yes|no]` after `efield` in `pair_coeff` (default **yes**): subtract the mean BEC
   so that Σ_i Z\*_i = 0 and the field forces sum to zero (no centre-of-mass drift). In the parallel
   pair style the mean is global over all MPI ranks.
 - `sevenn.calculator.FieldCalculator`: the same field force and `enforce_asr` for ASE MD.
+- `sevenn inference --enforce_asr` (`inference(..., enforce_asr=True)`), off by default: subtract the
+  mean predicted BEC of each structure before the errors and `per_atom.csv` are written. Not for
+  charged cells, where Σ_i Z\*_i = Q·I.
 - The pair styles log the field settings.
 
 ### Documented

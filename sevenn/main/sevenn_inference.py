@@ -86,6 +86,15 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '--enforce_asr',
+        action='store_true',
+        help=(
+            'subtract the mean predicted BEC of each structure so that '
+            'the BEC sum to zero (acoustic sum rule). Off by default; '
+            'not for charged cells'
+        ),
+    )
+    ag.add_argument(
         '--kwargs',
         nargs=argparse.REMAINDER,
         help='will be passed to reader, or can be used to specify EFS key',
@@ -156,6 +165,7 @@ def run(args):
         enable_cueq=args.enable_cueq,
         enable_flash=args.enable_flash,
         enable_oeq=args.enable_oeq,
+        enforce_asr=args.enforce_asr,
         **fmt_kwargs,
     )
 

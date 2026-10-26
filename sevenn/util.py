@@ -39,6 +39,12 @@ def to_atom_graph_list(atom_graph_batch) -> List[_const.AtomGraphDataType]:
     )
     inferred_force_list = torch.split(atom_graph_batch[KEY.PRED_FORCE], indices)
 
+    has_bec = KEY.PRED_BORN_EFFECTIVE_CHARGES in atom_graph_batch
+    if has_bec:
+        inferred_bec_list = torch.split(
+            atom_graph_batch[KEY.PRED_BORN_EFFECTIVE_CHARGES], indices
+        )
+
     inferred_stress_list = None
     if is_stress:
         inferred_stress_list = torch.unbind(atom_graph_batch[KEY.PRED_STRESS])
@@ -47,6 +53,9 @@ def to_atom_graph_list(atom_graph_batch) -> List[_const.AtomGraphDataType]:
         data[KEY.ATOMIC_ENERGY] = atomic_energy_list[i]
         data[KEY.PRED_TOTAL_ENERGY] = inferred_total_energy_list[i]
         data[KEY.PRED_FORCE] = inferred_force_list[i]
+
+        if has_bec:
+            data[KEY.PRED_BORN_EFFECTIVE_CHARGES] = inferred_bec_list[i]
         # To fit with KEY.STRESS (ref) format
         if is_stress and inferred_stress_list is not None:
             data[KEY.PRED_STRESS] = torch.unsqueeze(inferred_stress_list[i], 0)

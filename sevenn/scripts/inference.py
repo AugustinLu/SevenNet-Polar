@@ -3,6 +3,7 @@ import os
 from typing import Iterable, List, Optional, Union
 
 import numpy as np
+import torch
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
@@ -11,6 +12,25 @@ import sevenn.util as util
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.train.graph_dataset import SevenNetGraphDataset
 from sevenn.train.modal_dataset import SevenNetMultiModalDataset
+
+
+def _bec_to_cartesian(bec):
+    """
+    Predicted BEC in irreps form (N, 9), 1x0e+1x1e+1x2e, to Cartesian (N, 3, 3),
+    Z*_ab with the field index first, as written by the ASE calculator.
+    Input that is not in this form is returned unchanged.
+    """
+    bec = np.asarray(bec)
+    if bec.ndim == 1 and bec.size == 9:  # one atom, squeezed by fit_dimension
+        bec = bec.reshape(1, 9)
+    if bec.ndim != 2 or bec.shape[-1] != 9:
+        return bec
+    from e3nn.io import CartesianTensor
+
+    ct = CartesianTensor('ij')
+    rtp = ct.reduced_tensor_products()
+    bec_t = torch.as_tensor(bec)
+    return ct.to_cartesian(bec_t, rtp.to(bec_t.dtype)).numpy()
 
 
 def write_inference_csv(output_list, out):
@@ -75,6 +95,10 @@ def write_inference_csv(output_list, out):
         res = []
         natoms = dct[KEY.NUM_ATOMS]
         extracted = {k: dct[k] for k in keys if k in dct}
+        if KEY.PRED_BORN_EFFECTIVE_CHARGES in extracted:
+            extracted[KEY.PRED_BORN_EFFECTIVE_CHARGES] = _bec_to_cartesian(
+                extracted[KEY.PRED_BORN_EFFECTIVE_CHARGES]
+            )
         for i in range(natoms):
             raw = {}
             raw.update({k: v[i] for k, v in extracted.items()})
@@ -129,6 +153,50 @@ def write_inference_csv(output_list, out):
                 writer.writerow(data)
 
 
+def project_bec_asr(output: AtomGraphData) -> None:
+    """
+    Enforce the acoustic sum rule on the predicted BEC of a (batched) output:
+    subtract the mean predicted BEC of each structure, so that
+    sum_i Z*_i = 0 for every structure. Same projection as
+    FieldCalculator(enforce_asr=True) and the LAMMPS ``enforce_asr`` keyword.
+    The BEC is in its irreps form here; the map to Cartesian tensors is
+    linear, so subtracting the mean in either form gives the same result.
+    """
+    key = KEY.PRED_BORN_EFFECTIVE_CHARGES
+    if key not in output:
+        raise ValueError('enforce_asr requires a model that predicts BEC')
+    bec = output[key]
+    flat = bec.reshape(bec.shape[0], -1)
+    if KEY.BATCH in output:
+        batch = output[KEY.BATCH]
+    else:
+        batch = torch.zeros(flat.shape[0], dtype=torch.long, device=flat.device)
+    n_graph = int(batch.max().item()) + 1 if flat.shape[0] > 0 else 0
+    sums = torch.zeros(
+        (n_graph, flat.shape[1]), dtype=flat.dtype, device=flat.device
+    ).index_add_(0, batch, flat)
+    counts = torch.bincount(batch, minlength=n_graph).to(flat.dtype).unsqueeze(-1)
+    output[key] = (flat - (sums / counts)[batch]).reshape(bec.shape)
+
+
+def _error_recorder(output: AtomGraphData):
+    recorder_tuples = [
+        ('Energy', 'RMSE'),
+        ('Force', 'RMSE'),
+        ('Stress', 'RMSE'),
+        ('Energy', 'MAE'),
+        ('Force', 'MAE'),
+        ('Stress', 'MAE'),
+    ]
+    if KEY.PRED_BORN_EFFECTIVE_CHARGES in output:
+        # unlabeled BEC are NaN and are skipped by the metrics
+        recorder_tuples += [
+            ('BornEffectiveCharges', 'DiagRMSE'),
+            ('BornEffectiveCharges', 'OffDiagRMSE'),
+        ]
+    return util.get_error_recorder(recorder_tuples)
+
+
 def _patch_data_info(
     graph_list: Iterable[AtomGraphData], full_file_list: List[str]
 ) -> None:
@@ -158,6 +226,7 @@ def inference(
     enable_cueq: bool = False,
     enable_flash: bool = False,
     enable_oeq: bool = False,
+    enforce_asr: bool = False,
     **data_kwargs,
 ) -> None:
     """
@@ -177,6 +246,10 @@ def inference(
         device: device to evaluate, defaults to 'auto'
         batch_size: batch size for inference
         save_grpah: if True, save preprocessed graph to output dir
+        enforce_asr: if True, subtract the mean predicted BEC of each
+            structure (acoustic sum rule, sum_i Z*_i = 0) before errors and
+            outputs are computed. Off by default. Do not use it for charged
+            cells, where sum_i Z*_i = Q I.
         data_kwargs: keyword arguments used when reading targets,
             for example, given index='-1', only the last snapshot
             will be evaluated if it was ASE readable.
@@ -242,16 +315,20 @@ def inference(
     model.set_is_batch_data(True)
     model.eval()
 
-    rec = util.get_error_recorder()
+    rec = None
     output_list = []
 
     for batch in tqdm(loader):
         batch = batch.to(device)
         output = model(batch).detach().cpu()
+        if enforce_asr:
+            project_bec_asr(output)
+        if rec is None:
+            rec = _error_recorder(output)
         rec.update(output)
         output_list.extend(util.to_atom_graph_list(output))
 
-    errors = rec.epoch_forward()
+    errors = rec.epoch_forward() if rec is not None else {}
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
