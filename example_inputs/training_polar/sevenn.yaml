@@ -10,7 +10,7 @@ model:
 
 train:
   random_seed: 1
-  num_workers: 4
+  num_workers: 0  # the default; worker processes cost more than they save on small sets
   epoch: 40
   is_train_stress: True
   is_train_bec: True
