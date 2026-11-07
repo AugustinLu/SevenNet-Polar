@@ -38,6 +38,11 @@ NVIDIA are not modified.
 - **Examples and tests.** `examples/apple_gpu/` (single point, MD, relaxation, memory planning,
   benchmark, LAMMPS) and `tests/unit_tests/test_mps_opt.py`, which compares every kernel and the
   whole model with e3nn and skips where no Apple GPU exists.
+- **Tutorial notebooks.** `tutorials/` holds four notebooks that run on a laptop: a first
+  calculation on the CPU, the Apple GPU and the fused kernels; molecular dynamics of silicon;
+  relaxation and phonons; Born effective charges of ZrO2 and Li3PO4 with SevenNet-PM-S and
+  SevenNet-PS-S. The models are downloaded once from Zenodo (doi:10.5281/zenodo.23734482) and
+  checked. Without an Apple GPU the notebooks run on the CPU with smaller systems.
 
 ## [SevenNet-Polar 0.2] - 2026-10-29
 Field forces change: re-examine field runs made with earlier versions (see "Fixed").
