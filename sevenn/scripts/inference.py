@@ -314,6 +314,14 @@ def inference(
     model.to(device)
     model.set_is_batch_data(True)
     model.eval()
+    on_mps = torch.device(device).type == 'mps'
+    if on_mps:
+        # Apple GPU: fused Metal kernels, as in the calculator
+        from sevenn.nn.mps_opt import check_torch, enable_or_warn
+
+        check_torch('inference')
+        if os.environ.get('SEVENNET_MPS_OPT') != 'off':
+            enable_or_warn(model, 'inference')
 
     rec = None
     output_list = []

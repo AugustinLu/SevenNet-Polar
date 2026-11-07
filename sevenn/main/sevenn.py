@@ -48,6 +48,18 @@ def run(args):
     use_cue = args.enable_cueq
     use_flash = args.enable_flash
     use_oeq = args.enable_oeq
+    use_mps = args.enable_mps
+
+    if use_mps:
+        if use_cue or use_flash or use_oeq or distributed:
+            raise ValueError(
+                '--enable_mps runs on the Apple GPU: it cannot be combined with '
+                'cuEquivariance, FlashTP, OpenEquivariance or distributed training'
+            )
+        if not torch.backends.mps.is_available():
+            raise RuntimeError(
+                '--enable_mps needs an Apple GPU; MPS is not available'
+            )
 
     if use_cue:
         import sevenn.nn.cue_helper
@@ -128,6 +140,9 @@ def run(args):
         if use_oeq:
             model_config[KEY.USE_OEQ] = True
 
+        if use_mps:  # the Trainer switches on the fused kernels on this device
+            train_config[KEY.DEVICE] = 'mps'
+
         logger.print_config(model_config, data_config, train_config)
         # don't have to distinguish configs inside program
         global_config.update(model_config)
@@ -179,6 +194,15 @@ def cmd_parser_train(parser):
         '-oeq',
         '--enable_oeq',
         help='use OpenEquivariance accelerations for training',
+        action='store_true',
+    )
+    ag.add_argument(
+        '-mps',
+        '--enable_mps',
+        help=(
+            'train on the Apple GPU with fused Metal kernels (device mps; '
+            'SEVENNET_MPS_OPT=off for e3nn)'
+        ),
         action='store_true',
     )
     ag.add_argument(
@@ -274,7 +298,7 @@ def main():
     elif args.command in ['inference', 'inf']:
         inference_cmd.run(args)
     elif args.command == 'patch_lammps':
-        patch_lammps_cmd.run(args)
+        sys.exit(patch_lammps_cmd.run(args))
     elif args.command == 'preset':
         preset_cmd.run(args)
 

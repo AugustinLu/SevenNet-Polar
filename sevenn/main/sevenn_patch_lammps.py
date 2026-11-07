@@ -2,6 +2,7 @@ import argparse
 import os
 import os.path as osp
 import subprocess
+import sys
 
 from sevenn import __version__
 
@@ -36,6 +37,15 @@ def add_args(parser):
         help='Enable OpenEquivariance',
         action='store_true',
     )
+    ag.add_argument(
+        '--enable_mps',
+        dest='enable_mps',
+        help=(
+            'Serial pair style for the Apple GPU '
+            '(no libtorch link, no deploy step)'
+        ),
+        action='store_true',
+    )
     # cxx_standard is detected automatically
 
 
@@ -44,6 +54,17 @@ def run(args):
 
     print('Patching LAMMPS with the following settings:')
     print('  - LAMMPS source directory:', lammps_dir)
+
+    if args.enable_mps:
+        if args.d3 or args.enable_flash or args.enable_oeq:
+            raise ValueError(
+                '--enable_mps cannot be combined with --d3, '
+                '--enable_flash or --enable_oeq'
+            )
+        print('  - Apple GPU support enabled')
+        root = osp.abspath(f'{os.path.dirname(__file__)}/../..')
+        script = osp.join(pair_e3gnn_dir + '_mps', 'patch_lammps.sh')
+        return subprocess.run([script, lammps_dir, sys.executable, root]).returncode
 
     cxx_standard = '17'  # always 17
 
@@ -121,7 +142,7 @@ def run(args):
 def main(args=None):
     ag = argparse.ArgumentParser(description=description)
     add_args(ag)
-    run(ag.parse_args())
+    sys.exit(run(ag.parse_args()))
 
 
 if __name__ == '__main__':

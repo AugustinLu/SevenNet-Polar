@@ -24,7 +24,10 @@ def add_args(parser):
         '--device',
         type=str,
         default='auto',
-        help='cpu/cuda/cuda:x',
+        help=(
+            'cpu/cuda/cuda:x/mps. mps runs fused Metal kernels on the Apple GPU '
+            '(SEVENNET_MPS_OPT=off for e3nn); auto picks cuda or cpu'
+        ),
     )
     ag.add_argument(
         '-nw',
@@ -86,6 +89,15 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
+        '-mps',
+        '--enable_mps',
+        help=(
+            'use fused Metal kernels on the Apple GPU (device mps; '
+            'SEVENNET_MPS_OPT=off for e3nn)'
+        ),
+        action='store_true',
+    )
+    ag.add_argument(
         '--enforce_asr',
         action='store_true',
         help=(
@@ -113,6 +125,19 @@ def run(args):
         raise FileExistsError(f'Directory {out} already exists')
 
     device = args.device
+    if args.enable_mps:
+        if args.enable_cueq or args.enable_flash or args.enable_oeq:
+            raise ValueError(
+                '--enable_mps runs on the Apple GPU: it cannot be combined with '
+                'cuEquivariance, FlashTP or OpenEquivariance'
+            )
+        if device not in ('auto', 'mps'):
+            raise ValueError(f'--enable_mps runs on device mps, not {device}')
+        if not torch.backends.mps.is_available():
+            raise RuntimeError(
+                '--enable_mps needs an Apple GPU; MPS is not available'
+            )
+        device = 'mps'
     if device == 'auto':
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

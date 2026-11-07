@@ -18,8 +18,28 @@ def _as_univ(
     ]
 
 
+class _Float32OnMps:
+    """
+    The Apple GPU (MPS) has no float64. Shift and scale in float64, as in
+    SevenNet 0.13.1, go to float32 when the model moves there.
+    """
+
+    def _apply(self, fn, *args, **kwargs):
+        try:
+            to_mps = fn(torch.zeros(0)).device.type == 'mps'
+        except Exception:
+            to_mps = False
+        if to_mps:
+            for p in self._parameters.values():
+                if p is not None and p.dtype == torch.float64:
+                    p.data = p.data.float()
+                    if p.grad is not None:
+                        p.grad = p.grad.float()
+        return super()._apply(fn, *args, **kwargs)
+
+
 @compile_mode('script')
-class Rescale(nn.Module):
+class Rescale(_Float32OnMps, nn.Module):
     """
     Scaling and shifting energy (and automatically force and stress)
     """
@@ -57,7 +77,7 @@ class Rescale(nn.Module):
 
 
 @compile_mode('script')
-class SpeciesWiseRescale(nn.Module):
+class SpeciesWiseRescale(_Float32OnMps, nn.Module):
     """
     Scaling and shifting energy (and automatically force and stress)
     Use as it is if given list, expand to list if one of them is float
@@ -163,7 +183,7 @@ class SpeciesWiseRescale(nn.Module):
 
 
 @compile_mode('script')
-class ModalWiseRescale(nn.Module):
+class ModalWiseRescale(_Float32OnMps, nn.Module):
     """
     Scaling and shifting energy (and automatically force and stress)
     Given shift or scale is either modal-wise and atom-wise or

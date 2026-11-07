@@ -1,0 +1,21 @@
+# ZrO2, NPT, 1 fs: the serial SevenNet protocol with plain lmp -in. Needs LAMMPS_PLUGIN_PATH, see README.md. Set ckpt, data, nx, ny, nz, steps with -var.
+units          metal
+atom_style     atomic
+boundary       p p p
+read_data      ${data}
+replicate      ${nx} ${ny} ${nz}
+mass           1 91.224
+mass           2 15.999
+pair_style     e3gnn
+pair_coeff     * * ${ckpt} efield 0 0 0.05 Zr O
+neighbor       2.0 bin
+neigh_modify   every 1 delay 0 check yes
+timestep       0.001
+velocity       all create 1700.0 12345 mom yes rot yes
+thermo         10
+thermo_style   custom step temp press vol pe etotal
+thermo_modify  flush yes
+fix            bath all npt temp 1700.0 1700.0 0.1 aniso 1.0 1.0 1.0
+run            10
+reset_timestep 0
+run            ${steps}

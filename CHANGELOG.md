@@ -1,6 +1,44 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [SevenNet-Polar 0.3] - Unreleased
+Apple GPU support. Existing checkpoints run unchanged, and the CUDA, FlashTP and LAMMPS paths for
+NVIDIA are not modified.
+
+### Added
+- **Fused Metal kernels on Apple GPUs (`device='mps'`).** One generated Metal kernel per
+  convolution gathers, contracts with the nonzero Clebsch-Gordan coefficients and scatters,
+  without per-edge message tensors; three more give its first derivatives. Linear and
+  self-connection layers share a sparse-matrix kernel, and the gate has its own. The coefficients
+  are read off the e3nn modules, so results agree with e3nn to float32 noise. Modules switch class
+  when the calculator is built (`sevenn/nn/mps_fused.py`, `sevenn/nn/mps_opt.py`); state dicts are
+  unaffected. The model call is 17-31x faster than e3nn on the same GPU, and peak memory falls.
+- **Calculator options.** `SevenNetCalculator(..., device='mps')` uses the kernels by default;
+  `mps_opt='off'` gives the reference e3nn code on the GPU. `mps_edge_bucket` (default 256) pads
+  the edge list with zero-weight edges so that MD keeps a few tensor shapes. `mps_runtime.report`
+  lists what runs how. The kernels need `torch.mps.compile_shader`: all tests pass on 2.10-2.15;
+  2.7-2.9 run checkpoints; 2.6 runs the e3nn code on the GPU with a warning. Before 2.6 the Apple
+  GPU cannot run SevenNet at all (no `scatter_reduce` on MPS), and `device='mps'` stops with an error.
+- **Command line.** `sevenn train input.yaml --enable_mps` and `sevenn inference --enable_mps`
+  (`-mps`) run on the Apple GPU with the kernels, as `--enable_flash` does for FlashTP;
+  `device: mps` in the YAML and `sevenn inference --device mps` do the same.
+- **Ready for float64 shift and scale.** SevenNet 0.13.1 keeps the energy shift and scale in
+  float64, which the Apple GPU does not have. They go to float32 when a model moves to MPS
+  (`sevenn/nn/scale.py`); CPU and CUDA keep float64.
+- **Training on the Apple GPU.** In train mode the convolution keeps its kernels: each derivative
+  of the backward pass is one of the same three kernels with an input swapped, so force-loss
+  training works to any order; linear, self-connection and gate layers run a few PyTorch
+  operations. `Trainer` on `device='mps'` switches this on (`SEVENNET_MPS_OPT=off` keeps e3nn).
+  A training step is 14-22x faster than e3nn with 4-7x less memory held for the backward pass.
+- **Serial LAMMPS on a Mac.** `pair_style e3gnn` for Apple GPUs, built into LAMMPS with
+  `sevenn patch_lammps --enable_mps` or as a plugin for `pip install lammps`
+  (`sevenn/pair_e3gnn_mps/build_plugin.sh`); it embeds Python and calls the same calculator, as
+  TorchScript cannot hold the kernels. One MPI rank and `units metal` only. A `fix external`
+  bridge (`sevenn/lammps_pair.py`, `sevenn/lammps_external.py`) runs LAMMPS from Python.
+- **Examples and tests.** `examples/apple_gpu/` (single point, MD, relaxation, memory planning,
+  benchmark, LAMMPS) and `tests/unit_tests/test_mps_opt.py`, which compares every kernel and the
+  whole model with e3nn and skips where no Apple GPU exists.
+
 ## [SevenNet-Polar 0.2] - 2026-10-29
 Field forces change: re-examine field runs made with earlier versions (see "Fixed").
 

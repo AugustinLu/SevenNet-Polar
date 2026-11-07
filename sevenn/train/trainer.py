@@ -70,6 +70,13 @@ class Trainer:
 
         self.device = torch.device(device)
         self.distributed = distributed
+        if self.device.type == 'mps':
+            # Apple GPU: fused kernels in training and validation
+            from sevenn.nn.mps_opt import check_torch, enable_or_warn
+
+            check_torch('training')
+            if os.environ.get('SEVENNET_MPS_OPT') != 'off':
+                enable_or_warn(self.model, 'training')
 
         optimizer_args = optimizer_args or {}
         param = [p for p in self.model.parameters() if p.requires_grad]

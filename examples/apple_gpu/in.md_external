@@ -1,0 +1,23 @@
+# ZrO2, NPT, 1 fs: the serial SevenNet protocol with the pair style replaced. Run with 06_lammps_serial.py
+units          metal
+atom_style     atomic
+boundary       p p p
+read_data      ${data}
+replicate      ${nx} ${ny} ${nz}
+mass           1 91.224
+mass           2 15.999
+pair_style     zero 6.0
+pair_coeff     * *
+fix            sevenn all external pf/callback 1 1
+fix_modify     sevenn energy yes virial yes
+neighbor       2.0 bin
+neigh_modify   every 1 delay 0 check yes
+timestep       0.001
+velocity       all create 1700.0 12345 mom yes rot yes
+thermo         10
+thermo_style   custom step temp press vol pe etotal
+thermo_modify  flush yes
+fix            bath all npt temp 1700.0 1700.0 0.1 aniso 1.0 1.0 1.0
+run            10
+reset_timestep 0
+run            ${steps}
