@@ -6,6 +6,8 @@ Apple GPU support. Existing checkpoints run unchanged, and the CUDA, FlashTP and
 NVIDIA are not modified.
 
 ### Added
+- **Citation.** `CITATION.cff` and a README entry for citing this version (Zenodo
+  doi:10.5281/zenodo.24106383; all versions: doi:10.5281/zenodo.21334101).
 - **Fused Metal kernels on Apple GPUs (`device='mps'`).** One generated Metal kernel per
   convolution gathers, contracts with the nonzero Clebsch-Gordan coefficients and scatters,
   without per-edge message tensors; three more give its first derivatives. Linear and

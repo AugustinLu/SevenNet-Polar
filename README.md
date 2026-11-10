@@ -171,8 +171,6 @@ For batch evaluation, `sevenn inference` writes the raw predicted BEC by default
 
 ## Citation
 
-
-
 If you use SevenNet-Polar, please cite our [preprint](https://arxiv.org/abs/2607.14827):
 
 ```bib
@@ -184,6 +182,21 @@ If you use SevenNet-Polar, please cite our [preprint](https://arxiv.org/abs/2607
 	year = {2026},
 }
 ```
+
+If you use the Apple GPU kernels (`device='mps'`, `--enable_mps`), please also cite the version of the code you used ([Zenodo](https://doi.org/10.5281/zenodo.24106383)):
+
+```bib
+@software{lu_sevennet_polar_0_3_2026,
+	title = {SevenNet-Polar 0.3: fused Metal kernels for SevenNet on Apple GPUs},
+	version = {0.3},
+	publisher = {Zenodo},
+	doi = {10.5281/zenodo.24106383},
+	author = {Lu, Anh Khoa Augustin and Arai, Shungo and Park, Yutack and Han, Seungwu and Miyazaki, Tsuyoshi and Watanabe, Satoshi},
+	year = {2026},
+}
+```
+
+To cite the code without a specific version, use the DOI that covers all versions: [10.5281/zenodo.21334101](https://doi.org/10.5281/zenodo.21334101). `CITATION.cff` gives the same information to GitHub's "Cite this repository".
 
 If you use the base SevenNet code, please cite the original [paper](https://pubs.acs.org/doi/full/10.1021/acs.jctc.4c00190):
 

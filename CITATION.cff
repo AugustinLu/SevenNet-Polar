@@ -1,0 +1,77 @@
+cff-version: 1.2.0
+message: "If you use SevenNet-Polar, please cite the preprint below. If you use the Apple GPU kernels, please also cite this version of the software."
+title: "SevenNet-Polar"
+type: software
+version: "0.3"
+doi: 10.5281/zenodo.24106383
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24106383
+    description: "SevenNet-Polar 0.3 (Apple GPU kernels)"
+  - type: doi
+    value: 10.5281/zenodo.21334101
+    description: "All versions of SevenNet-Polar"
+license: MIT
+repository-code: "https://github.com/AugustinLu/SevenNet-Polar"
+authors:
+  - family-names: Lu
+    given-names: Anh Khoa Augustin
+    orcid: "https://orcid.org/0000-0003-4702-0933"
+    affiliation: "The University of Tokyo"
+  - family-names: Arai
+    given-names: Shungo
+    affiliation: "The University of Tokyo"
+  - family-names: Park
+    given-names: Yutack
+    orcid: "https://orcid.org/0009-0008-8690-935X"
+    affiliation: "Seoul National University"
+  - family-names: Han
+    given-names: Seungwu
+    orcid: "https://orcid.org/0009-0008-6542-0483"
+    affiliation: "Seoul National University"
+  - family-names: Miyazaki
+    given-names: Tsuyoshi
+    orcid: "https://orcid.org/0000-0003-3534-4404"
+    affiliation: "National Institute for Materials Science"
+  - family-names: Watanabe
+    given-names: Satoshi
+    orcid: "https://orcid.org/0000-0002-8069-6938"
+    affiliation: "The University of Tokyo"
+preferred-citation:
+  type: article
+  title: "SevenNet-Polar for MultiTask Prediction of Energy, Forces, Stress, and Born Effective Charges: Development and Application to ZrO2, Li3PO4, and Perovskites"
+  journal: "arXiv preprint"
+  year: 2026
+  doi: 10.48550/arXiv.2607.14827
+  authors:
+    - family-names: Lu
+      given-names: Anh Khoa Augustin
+    - family-names: Arai
+      given-names: Shungo
+    - family-names: Park
+      given-names: Yutack
+    - family-names: Han
+      given-names: Seungwu
+    - family-names: Miyazaki
+      given-names: Tsuyoshi
+    - family-names: Watanabe
+      given-names: Satoshi
+references:
+  - type: article
+    title: "Scalable Parallel Algorithm for Graph Neural Network Interatomic Potentials in Molecular Dynamics Simulations"
+    journal: "J. Chem. Theory Comput."
+    volume: 20
+    issue: 11
+    start: 4857
+    end: 4868
+    year: 2024
+    doi: 10.1021/acs.jctc.4c00190
+    authors:
+      - family-names: Park
+        given-names: Yutack
+      - family-names: Kim
+        given-names: Jaesun
+      - family-names: Hwang
+        given-names: Seungwoo
+      - family-names: Han
+        given-names: Seungwu
