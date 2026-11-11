@@ -1408,10 +1408,9 @@ def test_pair_coeff_parser_says_what_is_wrong():
 
     with pytest.raises(ValueError, match='modal requires'):
         _parse(['modal'])
-    # the NVIDIA pair style of this version has a Cartesian field only
-    for words in (['efield_reduced', '1', '0', '0'], ['efield', '0', '0', '1',
-                  'efield_mode', 'reduced']):
-        with pytest.raises(ValueError, match='not available in this version'):
+    # an unknown keyword is reported, not taken as an element
+    for words in (['field', '1', '0', '0'], ['efield', '0', '0', '1', 'asr', 'no']):
+        with pytest.raises(ValueError, match='neither a keyword'):
             _parse(words + ['Na', 'Cl'])
     assert _parse(['efield', '0', '0', '0.05', 'enforce_asr', 'no', 'Na'])[
         'efield'

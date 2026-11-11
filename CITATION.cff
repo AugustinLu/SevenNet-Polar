@@ -3,6 +3,7 @@ message: "If you use SevenNet-Polar, please cite the preprint below. If you use 
 title: "SevenNet-Polar"
 type: software
 version: "0.3"
+date-released: "2026-11-11"
 doi: 10.5281/zenodo.24106383
 identifiers:
   - type: doi

@@ -43,9 +43,7 @@ def _parse(args: List[str]) -> dict:
     while i < len(args) and args[i] in (
         'modal',
         'efield',
-        'efield_reduced',
         'enforce_asr',
-        'efield_mode',
         'efield_virial',
     ):
         key = args[i]
@@ -71,12 +69,13 @@ def _parse(args: List[str]) -> dict:
                 'e3gnn: efield_virial is not supported: direct models derive from '
                 'no field energy and have no field stress'
             )
-        else:  # as in the NVIDIA pair style of this version
-            raise ValueError(
-                f'e3gnn: {key} is not available in this version; give efield Ex '
-                f'Ey Ez in V/Angstrom'
-            )
     out['symbols'] = args[i:]
+    bad = [s for s in out['symbols'] if s not in atomic_numbers]
+    if bad:
+        raise ValueError(
+            f'e3gnn: {bad[0]} is neither a keyword (modal, efield, enforce_asr) nor '
+            f'an element symbol'
+        )
     return out
 
 

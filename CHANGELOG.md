@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [SevenNet-Polar 0.3] - Unreleased
+## [SevenNet-Polar 0.3] - 2026-11-11
 Apple GPU support. Existing checkpoints run unchanged, and the CUDA, FlashTP and LAMMPS paths for
 NVIDIA are not modified.
 
