@@ -1,6 +1,21 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [SevenNet-Polar 0.3.1] - 2026-11-12
+Bug fix in the parallel LAMMPS pair style.
+
+### Fixed
+- **`pair_style e3gnn/parallel` on some processor grids.** Energies, forces and stress were wrong
+  when the unsplit direction of the processor grid lies between two split ones (`2 1 2`, `2 1 3`,
+  `3 1 2`, ...; LAMMPS chooses `2 1 2` by itself for 4 ranks on near-cubic boxes): up to 1.6e-2 eV/A
+  in the forces of a 1,728-atom Si cell with 7net-0. Relay slots of the per-layer ghost exchange
+  were keyed by atom index, so the copy of a relayed ghost made by the self-swap of the unsplit
+  direction was forwarded with empty node features and its gradient was lost. They are now keyed by
+  atom tag, like graph nodes, and the reverse exchange removes duplicates for all of them. All grids
+  tested (`1 2 2`, `2 1 2`, `2 2 1`, `3 1 2` and the LAMMPS default) agree with one rank to float32
+  noise. Present since the original SevenNet parallel pair style;
+  with older builds, set a grid without that pattern, e.g. `processors 1 2 2`.
+
 ## [SevenNet-Polar 0.3] - 2026-11-11
 Apple GPU support. Existing checkpoints run unchanged, and the CUDA, FlashTP and LAMMPS paths for
 NVIDIA are not modified.
