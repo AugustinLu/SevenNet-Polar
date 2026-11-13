@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from ase.data import atomic_numbers
 
 import sevenn._keys as KEY
-from sevenn import __version__
+from sevenn import __polar_version__, __version__
 
 CHEM_SYMBOLS = {v: k for k, v in atomic_numbers.items()}
 
@@ -261,7 +261,10 @@ class Logger(metaclass=Singleton):
         with open(LOGO_ASCII_FILE, 'r') as logo_f:
             logo_ascii = logo_f.read()
         content = 'SevenNet: Scalable EquiVariance-Enabled Neural Network\n'
-        content += f'version {__version__}, {time.ctime()}\n'
+        content += (
+            f'version {__version__} (SevenNet-Polar {__polar_version__}), '
+            f'{time.ctime()}\n'
+        )
         self.write(content)
         self.write(logo_ascii)
 

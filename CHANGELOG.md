@@ -1,7 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [SevenNet-Polar 0.3.2] - Unreleased
+## [SevenNet-Polar 0.3.2] - 2026-11-13
+Bug fix for training and `sevenn inference` on the Apple GPU.
+
+### Added
+- **The log names the SevenNet-Polar release**: `version 0.12.2.dev0 (SevenNet-Polar 0.3.2)`.
+  The package version stays the SevenNet one, which checkpoints record.
 
 ### Fixed
 - **Memory growth in training and `sevenn inference` on the Apple GPU.** PyTorch's MPS backend

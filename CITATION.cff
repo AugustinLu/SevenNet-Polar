@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use SevenNet-Polar, please cite the preprint below. If you use the Apple GPU kernels, please also cite this version of the software."
 title: "SevenNet-Polar"
 type: software
-version: "0.3.1"
-date-released: "2026-11-12"
+version: "0.3.2"
+date-released: "2026-11-13"
 doi: 10.5281/zenodo.24106383
 identifiers:
   - type: doi
