@@ -937,6 +937,91 @@ class MpsRuntime:
 _FUSED = (FusedConvolution, FusedLinear, FusedSelfConnection, FusedGate)
 
 
+def _is_edge_key(key: str) -> bool:
+    """Per-edge tensors of a batch or an output, by name: never a per-atom tensor,
+    even when a small batch has as many atoms as edges."""
+    return key in (KEY.EDGE_VEC, KEY.EDGE_LENGTH, KEY.EDGE_ATTR, KEY.EDGE_EMBEDDING,
+                   KEY.CELL_SHIFT) or key.startswith('edge_')
+
+
+class BatchPadder:
+    """Pads the edges of a batch (training, validation, `sevenn inference`) to a
+    multiple of `bucket`, so that the Apple GPU sees few distinct tensor shapes.
+
+    PyTorch's MPS backend compiles a graph for every new shape of an operation
+    and keeps it for the life of the process. A shuffled data set gives almost
+    every batch a new number of edges, so without padding the process grows by
+    about a gigabyte a minute in training. Pad edges are those of pad_edges: atom
+    0 to atom 0 with vector (cutoff, 0, 0), placed after the real edges, where the
+    kernels never look. Energy, forces, stress, Born charges and every gradient
+    are therefore those of the unpadded batch. Off (bucket 0) when a convolution
+    is left on e3nn or a pad edge would not be silent, as in the calculator.
+
+    """
+
+    def __init__(self, model, bucket: int = 256):
+        self.bucket = 0
+        self.plan = getattr(model, '_mps_plan', None)
+        self.cutoff = float(getattr(model, 'cutoff', 0.0) or 0.0)
+        if self.plan is None or bucket <= 1:
+            return
+        on_e3nn = any(type(m) is IrrepsConvolution for m in model.modules())
+        if on_e3nn or self.cutoff <= 0.0 or not padding_is_safe(
+            model, self.cutoff, all_fused=True
+        ):
+            warnings.warn(
+                'edge padding of batches disabled: pad edges would not be silent '
+                'for this model, and memory may grow with each new batch shape'
+            )
+            return
+        self.bucket = int(bucket)
+
+    def __call__(self, batch):
+        if not self.bucket:
+            return batch
+        idx = batch[KEY.EDGE_IDX]
+        n_real = int(idx.shape[1])
+        n_pad = (-n_real) % self.bucket
+        if n_pad == 0 or n_real == 0:
+            return batch
+        for key in list(batch.keys()):
+            t = batch[key]
+            if (
+                key == KEY.EDGE_IDX
+                or not _is_edge_key(key)
+                or not isinstance(t, torch.Tensor)
+                or t.dim() == 0
+                or t.shape[0] != n_real
+            ):
+                continue
+            pad = t.new_zeros((n_pad,) + tuple(t.shape[1:]))
+            if key == KEY.EDGE_VEC:
+                pad[:, 0] = self.cutoff
+            batch[key] = torch.cat([t, pad], 0)
+        batch[KEY.EDGE_IDX] = torch.cat([idx, idx.new_zeros((2, n_pad))], 1)
+        self.plan.expect_padded = (n_real, n_real + n_pad)
+        return batch
+
+    def unpad(self, out, n_real: int):
+        """Drop the pad edges from a model output, e.g. before it is split back into
+        structures; n_real is the edge count before padding."""
+        n_all = int(out[KEY.EDGE_IDX].shape[1])
+        if n_all == n_real:
+            return out
+        for key in list(out.keys()):
+            t = out[key]
+            if key == KEY.EDGE_IDX:
+                out[key] = t[:, :n_real]
+            elif (
+                _is_edge_key(key)
+                and isinstance(t, torch.Tensor)
+                and t.dim() > 0
+                and t.shape[0] == n_all
+            ):
+                out[key] = t[:n_real]
+        return out
+
+
 def padding_is_safe(model, cutoff: float, all_fused: bool = False) -> bool:
     """True if a pad edge (r = cutoff) gives exactly zero radial weights in every
     convolution, with finite derivatives.

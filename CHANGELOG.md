@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [SevenNet-Polar 0.3.2] - Unreleased
+
+### Fixed
+- **Memory growth in training and `sevenn inference` on the Apple GPU.** PyTorch's MPS backend
+  compiles a graph for every new tensor shape and keeps it for the life of the process. Batches
+  of a shuffled data set have a new number of edges almost every time, so a training run grew
+  by about a gigabyte a minute: 19 GB and 20,000 cached graphs after six minutes for a small
+  Polar model (32 channels, batches of 4 x 100 atoms). Batches are now padded to a multiple of
+  256 edges, as the calculator already did for MD (`BatchPadder` in `sevenn/nn/mps_opt.py`):
+  the same run stays at 5.8 GB with 787 graphs, at the same speed. Pad edges are never visited
+  by the kernels, so energies, forces, stress, Born charges and gradients are unchanged (after
+  one epoch the training metrics agree with the unpadded code to six digits); `sevenn
+  inference` removes them again before writing results.
 ## [SevenNet-Polar 0.3.1] - 2026-11-12
 Bug fix in the parallel LAMMPS pair style.
 

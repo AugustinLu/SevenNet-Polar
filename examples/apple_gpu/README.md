@@ -18,7 +18,7 @@ print(base.mps_runtime.mode, base.mps_runtime.report)         # what runs how
 | `mps_opt='off'`, or environment `SEVENNET_MPS_OPT=off` | the reference e3nn code, unchanged, on the GPU |
 | `mps_edge_bucket=0` | no edge padding (slower MD: each new edge count costs about 20 ms at 96 atoms) |
 | `device='auto'` or `'cpu'` or `'cuda'` | nothing changes; the Apple code is not imported |
-| `sevenn inference --enable_mps ...` (or `--device mps`) | evaluates a dataset with the fused kernels (no edge padding); `SEVENNET_MPS_OPT=off` for e3nn |
+| `sevenn inference --enable_mps ...` (or `--device mps`) | evaluates a dataset with the fused kernels; batches padded to 256 edges; `SEVENNET_MPS_OPT=off` for e3nn |
 | `sevenn train input.yaml --enable_mps` (or `device: mps` in the YAML), `Trainer(..., device='mps')` | training on the fused kernels; `SEVENNET_MPS_OPT=off` for e3nn |
 
 Explicit `mps_opt='fused'` on another device, or on a deployed TorchScript model, is an error. With the default setting a TorchScript model, or
@@ -48,6 +48,10 @@ train mode (16 s and 4 GB in all for 7net-omni at 96 atoms). `Trainer` on `devic
 
 M5 Pro, plugged in; gradients equal to e3nn within 1.4e-6 relative. Through `Trainer`, a 7net-0 fine-tune epoch of 8 structures
 takes 0.24 s against 2.9 s.
+
+Batches are padded to a multiple of 256 edges in training and `sevenn inference`, so the GPU
+sees few tensor shapes: PyTorch compiles and keeps a graph for every new shape, and memory
+would otherwise grow with every batch of a shuffled data set (fixed in 0.3.2).
 
 Training on a small dataset: keep `num_workers: 0` (the default). On macOS each
 DataLoader worker is a new process that imports torch, e3nn and SevenNet, about 3 s,

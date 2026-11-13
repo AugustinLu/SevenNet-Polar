@@ -315,20 +315,28 @@ def inference(
     model.set_is_batch_data(True)
     model.eval()
     on_mps = torch.device(device).type == 'mps'
+    pad = None
     if on_mps:
         # Apple GPU: fused Metal kernels, as in the calculator
         from sevenn.nn.mps_opt import check_torch, enable_or_warn
 
         check_torch('inference')
         if os.environ.get('SEVENNET_MPS_OPT') != 'off':
-            enable_or_warn(model, 'inference')
+            if enable_or_warn(model, 'inference') is not None:
+                from sevenn.nn.mps_opt import BatchPadder
+
+                pad = BatchPadder(model)
 
     rec = None
     output_list = []
 
     for batch in tqdm(loader):
         batch = batch.to(device)
-        output = model(batch).detach().cpu()
+        if pad is not None:  # few shapes on the Apple GPU (see BatchPadder)
+            n_real = int(batch[KEY.EDGE_IDX].shape[1])
+            output = pad.unpad(model(pad(batch)), n_real).detach().cpu()
+        else:
+            output = model(batch).detach().cpu()
         if enforce_asr:
             project_bec_asr(output)
         if rec is None:
