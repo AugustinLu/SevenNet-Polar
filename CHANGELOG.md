@@ -1,6 +1,34 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [SevenNet-Polar 0.3.3] - 2026-11-15
+Bug fix in the higher derivatives of the Apple GPU convolution, and clearer documentation of
+field MD and of the Apple GPU limits.
+
+### Fixed
+- **Mixed higher derivatives through a non-contiguous convolution input on the Apple GPU.** The
+  fused convolution saved the contiguous copies it made of its inputs. A copy made from a
+  non-contiguous input (a transposed view, for example) is not connected to the caller's graph, so
+  derivatives beyond the first through that input were missing (`None` where e3nn gives a value).
+  The inputs are now saved as given; only the kernel launches read contiguous copies. SevenNet and
+  SevenNet-Polar models pass contiguous inputs (checked for 7net-0 and SevenNet-PM-S), so energies,
+  forces, stress, Born charges and force-loss training were not affected. A new test takes mixed
+  derivatives to third order through transposed views and compares them with e3nn.
+
+### Changed
+- **Training sees the real edges only.** `Trainer` removes the pad edges from the model output
+  before losses and metrics read it, as `sevenn inference` already did. No current loss or metric
+  reads edge tensors, so results are unchanged.
+- **Field MD wording** (README, `FieldCalculator`): with a Direct model the field forces Z\*ᵀE are
+  not the gradient of an energy, so a thermostat keeps a run stable but does not make it sample an
+  equilibrium finite-field ensemble, and NPT sees only the zero-field stress. `enforce_asr` is for
+  neutral cells: a charged cell has Σ_i Z\*_i = Q·I (also in the Born-charge tutorial).
+- **Apple GPU limits documented** (`examples/apple_gpu/README.md`): eval-mode parameter gradients of
+  the linear and self-connection layers, weights written through `param.data`, the 32-bit index
+  limit (about 493,000 edges for SevenNet-PM-M), and the scope of the 0.3.2 padding (only the edge
+  count is padded; memory was measured flat on fixed-size data sets). The training table and the
+  example commands use the public SevenNet-PM-S and PM-M checkpoints.
+
 ## [SevenNet-Polar 0.3.2] - 2026-11-13
 Bug fix for training and `sevenn inference` on the Apple GPU.
 
