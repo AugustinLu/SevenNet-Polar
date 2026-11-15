@@ -157,13 +157,13 @@ Optional keywords may follow the field vector, in any order:
 
 | keyword | default | meaning |
 |---|---|---|
-| `enforce_asr [yes\|no]` | `yes` | Project out the mean BEC so that Σ_i Z\*_i = 0 before it is used: the field forces then sum to zero (no centre-of-mass drift). A bare `enforce_asr` means `yes`. |
+| `enforce_asr [yes\|no]` | `yes` | Project out the mean BEC so that Σ_i Z\*_i = 0 before it is used: the field forces then sum to zero (no centre-of-mass drift). A bare `enforce_asr` means `yes`. For neutral cells only: a charged cell has Σ_i Z\*_i = Q·I. |
 
 ```lammps
 pair_coeff     * * model.pt efield 0.0 0.0 0.01 enforce_asr yes Zr O
 ```
 
-**No field energy, no field stress.** The BEC is predicted per atom and is not the Jacobian of any polarization function, so the field force Z\*ᵀE is not the gradient of an energy. There is therefore no field energy and no field virial: the reported energy and pressure are those of the zero-field model, and `fix npt` under a field sees only the zero-field stress (as with LAMMPS's own `fix efield` by default). Thermostatted MD (NVT, or NPT with that caveat) is fine. NVE energy-conservation checks and energy minimization under a field are not meaningful.
+**No field energy, no field stress.** The BEC is predicted per atom and is not the Jacobian of any polarization function, so the field force Z\*ᵀE is not the gradient of an energy. There is therefore no field energy and no field virial: the reported energy and pressure are those of the zero-field model, and `fix npt` under a field sees only the zero-field stress (as with LAMMPS's own `fix efield` by default). MD under a field is therefore driven by non-conservative forces: a thermostat keeps it stable, but it does not sample an equilibrium finite-field ensemble, and NPT sees only the zero-field stress; describe such runs as field-driven dynamics. NVE energy-conservation checks and energy minimization under a field are not meaningful. `enforce_asr yes` is for neutral cells: a charged cell has Σ_i Z\*_i = Q·I, so leave it off there.
 
 The same field force and `enforce_asr` are available from ASE via `sevenn.calculator.FieldCalculator`, for users who prefer to drive MD from ASE rather than LAMMPS.
 

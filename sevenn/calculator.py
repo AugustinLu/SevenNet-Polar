@@ -325,8 +325,13 @@ class FieldCalculator(Calculator):
     is not the Jacobian of any polarization function, so the field force
     is not the gradient of an energy: there is no field energy term, and so
     no field virial. Energy and stress are those of the base calculator.
-    Thermostatted MD is unaffected; NVE energy-conservation checks and
-    energy minimization under a field are not meaningful.
+    MD under a field is driven by these non-conservative forces: a
+    thermostat keeps it stable, but it does not sample an equilibrium
+    finite-field ensemble, and NPT sees only the zero-field stress. NVE
+    energy-conservation checks and energy minimization under a field are
+    not meaningful. `enforce_asr` makes the Born charges sum to zero, which
+    is right for a neutral cell; a charged cell has sum Z* = Q I, so leave
+    it off there.
 
     Parameters
     ----------

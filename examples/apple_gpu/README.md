@@ -28,8 +28,8 @@ multiplicities differ, a gate activation other than silu and tanh, a non-one-hot
 warning; `base.mps_runtime.report` counts them. Nothing moves to the CPU. Leave `PYTORCH_ENABLE_MPS_FALLBACK` unset: SevenNet does not need
 it, and it is what would let PyTorch move operations to the CPU silently (the calculator warns if it is set).
 
-Call `disable(model)` before saving a whole model object or moving it off the Apple GPU: the kernel tables are not buffers (`state_dict` is not affected). All tests pass on PyTorch 2.10 to 2.15; on 2.7 to 2.9 checkpoints run but a model object cannot be deep-copied, and below 2.7 the reference code runs. Checkpoints load unchanged. Derivatives with respect to positions, strain and field are complete. Parameter gradients in eval mode are not: use train mode or `mps_opt='off'`. Second derivatives: the convolution kernels have derivatives to any order; the linear and gate kernels have first derivatives
-only, so `create_graph=True` in eval mode raises an error from those layers.
+Call `disable(model)` before saving a whole model object or moving it off the Apple GPU: the kernel tables are not buffers (`state_dict` is not affected). All tests pass on PyTorch 2.10 to 2.15; on 2.7 to 2.9 checkpoints run but a model object cannot be deep-copied, and below 2.7 the reference code runs. Checkpoints load unchanged. Derivatives with respect to positions, strain and field are complete. Parameter gradients in eval mode are not: the linear and self-connection layers treat their weights as constants there and return none, with no error (the radial networks and convolutions do return them); use train mode or `mps_opt='off'`. Weights written through `param.data` are not noticed by the eval tables: load them with `load_state_dict` or assign new parameters. Second derivatives: the convolution kernels have derivatives to any order, including mixed ones through non-contiguous inputs since 0.3.3; the linear and gate kernels have first derivatives
+only, so `create_graph=True` in eval mode raises an error from those layers. The kernels index with 32-bit integers: a convolution needs edges × weights per edge below 2^31 (SevenNet-PM-M: about 493,000 edges, some 6,000 atoms of ZrO2), whatever the memory; larger graphs stop with an error that names `mps_opt='off'`.
 
 Training: in `model.train()` the convolutions keep running the fused kernels. The product is linear in each of its inputs, so
 each derivative of the backward pass is one of the same three kernels with an input swapped; written as autograd functions that
@@ -41,17 +41,20 @@ train mode (16 s and 4 GB in all for 7net-omni at 96 atoms). `Trainer` on `devic
 
 | model, batch | e3nn: step, memory kept for backward | fused: step, memory kept |
 |---|---|---|
-| S Direct, 4 × 96 atoms | 2,430 ms, 5.56 GB | 109 ms, 1.23 GB |
-| M Direct, 4 × 12 atoms | 2,410 ms, 3.91 GB | 133 ms, 0.59 GB |
+| SevenNet-PM-S, 4 × 96 atoms | 2,660 ms, 5.56 GB | 119 ms, 1.24 GB |
+| SevenNet-PM-M, 4 × 12 atoms | 2,640 ms, 3.91 GB | 154 ms, 0.70 GB |
 | 7net-0, 4 × 96 atoms | 1,400 ms, 3.70 GB | 99 ms, 0.93 GB |
 | 7net-l3i5, 2 × 96 atoms | 2,110 ms, 4.13 GB | 100 ms, 0.69 GB |
 
-M5 Pro, plugged in; gradients equal to e3nn within 1.4e-6 relative. Through `Trainer`, a 7net-0 fine-tune epoch of 8 structures
+M5 Pro, plugged in, one repeated batch (Adam with learning rate 0, so the inputs stay fixed); gradients equal to e3nn within 1.4e-6 relative. Through `Trainer`, a 7net-0 fine-tune epoch of 8 structures
 takes 0.24 s against 2.9 s.
 
 Batches are padded to a multiple of 256 edges in training and `sevenn inference`, so the GPU
 sees few tensor shapes: PyTorch compiles and keeps a graph for every new shape, and memory
-would otherwise grow with every batch of a shuffled data set (fixed in 0.3.2).
+would otherwise grow with every batch of a shuffled data set (fixed in 0.3.2). Only the edge count is
+padded. On the data sets measured (ZrO2-type cells of about 100 atoms, batches of 1 to 4, ten minutes)
+memory stays flat; a data set with widely varying atom counts brings new shapes of other tensors
+too, which PyTorch also keeps, so check the memory of a first epoch there.
 
 Training on a small dataset: keep `num_workers: 0` (the default). On macOS each
 DataLoader worker is a new process that imports torch, e3nn and SevenNet, about 3 s,
@@ -85,7 +88,7 @@ cd lammps_sevenn && mkdir build && cd build && cmake ../cmake -DBUILD_MPI=no -DB
 ```
 
 ```bash
-./lmp -in in.md_e3gnn -var ckpt D_base.pth -var data tZrO2_12atom.data -var nx 2 -var ny 2 -var nz 2 -var steps 100
+./lmp -in in.md_e3gnn -var ckpt SevenNet-PM-S.pth -var data tZrO2_12atom.data -var nx 2 -var ny 2 -var nz 2 -var steps 100
 ```
 
 **Option 2, no build, with `pip install lammps mpich`:** the same pair style as a plugin.
@@ -104,34 +107,34 @@ Per-atom energies work; per-atom stress does not, as on NVIDIA. The model builds
 
 It needs `units metal` and one MPI rank, and stops with an error otherwise. So does `neigh_modify exclude`, which it cannot honour: it sees all atoms. `pair_style hybrid/overlay` works, with all atom types mapped to elements: `NULL` is not supported, and there is no neighbor list request, as the model builds its own edges (computes such as `rdf` request their own).
 
-**With a field,** the reported energy is the zero-field U, as on NVIDIA. Direct models add Z*E to the forces, so the forces are not the gradient of the reported energy. Energy-based minimization and energy-conservation checks can mislead under a field.
+**With a field,** the reported energy is the zero-field U, as on NVIDIA. Direct models add Z*ᵀE to the forces, so the forces are not the gradient of the reported energy. Energy-based minimization and energy-conservation checks can mislead under a field, and a thermostatted run is field-driven dynamics, not an equilibrium finite-field ensemble. `enforce_asr yes` is for neutral cells.
 
 ## Examples
 
-All take `--ckpt` (a SevenNet or SevenNet-Polar Direct checkpoint). Examples for ZrO2 with 96 atoms use `--repeat 2` (the default):
+All take `--ckpt` (a SevenNet or SevenNet-Polar Direct checkpoint; `SevenNet-PM-S.pth` from the SevenNet-Polar models on Zenodo, doi:10.5281/zenodo.23734482, is used below). Examples for ZrO2 with 96 atoms use `--repeat 2` (the default):
 
 ```bash
-python 01_single_point.py --ckpt D_base.pth
+python 01_single_point.py --ckpt SevenNet-PM-S.pth
 ```
 
 ```bash
-python 01_single_point.py --ckpt D_base.pth --efield 0 0 0.05
+python 01_single_point.py --ckpt SevenNet-PM-S.pth --efield 0 0 0.05
 ```
 
 ```bash
-python 02_md.py --ckpt D_base.pth --steps 200 --efield 0 0 0.05
+python 02_md.py --ckpt SevenNet-PM-S.pth --steps 200 --efield 0 0 0.05
 ```
 
 ```bash
-python 03_relax.py --ckpt D_base.pth --fmax 0.02
+python 03_relax.py --ckpt SevenNet-PM-S.pth --fmax 0.02
 ```
 
 ```bash
-python 04_plan_memory.py --ckpt D_base.pth --atoms 2000 --limit-gb 14
+python 04_plan_memory.py --ckpt SevenNet-PM-S.pth --atoms 2000 --limit-gb 14
 ```
 
 ```bash
-python 05_benchmark.py --ckpt D_base.pth --repeat 3
+python 05_benchmark.py --ckpt SevenNet-PM-S.pth --repeat 3
 ```
 
 ## Serial LAMMPS
@@ -146,7 +149,7 @@ fix_modify   sevenn energy yes virial yes
 ```
 
 ```bash
-python 06_lammps_serial.py --ckpt D_base.pth --efield 0 0 0.05 --steps 100
+python 06_lammps_serial.py --ckpt SevenNet-PM-S.pth --efield 0 0 0.05 --steps 100
 ```
 
 Serial only. It runs as `python 06_lammps_serial.py`, not `lmp -in`. A deployed TorchScript model cannot use these kernels, and parallel LAMMPS is not supported on a Mac.

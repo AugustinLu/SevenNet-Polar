@@ -433,7 +433,7 @@ for f, idx in sorted(groups.items()):
     print(f'{f:12s} ' + ' '.join(f'{v:7.3f}' for v in row))"""),
     M("""The neutral cells sum to zero, and the charged cells to about −1 e, in DFT and in both models: they
 have learnt the rule from the data. The finite-field calculator below can enforce the neutral rule
-exactly (`enforce_asr=True`)."""),
+exactly (`enforce_asr=True`); keep it off for a charged cell, whose Born charges sum to Q·I."""),
     M("""## Forces in an electric field
 
 To first order, a uniform field **E** adds a force on each atom given by its Born charge:
