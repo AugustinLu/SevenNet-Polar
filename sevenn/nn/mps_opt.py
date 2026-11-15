@@ -957,6 +957,10 @@ class BatchPadder:
     are therefore those of the unpadded batch. Off (bucket 0) when a convolution
     is left on e3nn or a pad edge would not be silent, as in the calculator.
 
+    The batch is changed in place and is meant for one model call. Padding it again
+    adds nothing; its pad edges then count as real edges, which is slower but gives
+    the same results, since padding is on only where pad edges are silent.
+
     """
 
     def __init__(self, model, bucket: int = 256):

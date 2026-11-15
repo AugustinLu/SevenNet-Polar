@@ -172,8 +172,11 @@ class Trainer:
                 self.optimizer.zero_grad()
             batch = batch.to(self.device, non_blocking=True)
             if self._pad is not None:
-                batch = self._pad(batch)
-            output = self.model(batch)
+                n_real = int(batch[KEY.EDGE_IDX].shape[1])
+                # losses and metrics see the real edges only
+                output = self._pad.unpad(self.model(self._pad(batch)), n_real)
+            else:
+                output = self.model(batch)
             if error_recorder is not None:
                 error_recorder.update(output)
             if is_train:

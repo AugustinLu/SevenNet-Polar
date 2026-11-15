@@ -338,6 +338,44 @@ def test_kernels_equal_e3nn_to_third_order(tp_fn):
 
 
 @needs_mps
+@pytest.mark.parametrize('tp_fn', [_tp, _tp_unequal])
+def test_kernels_mixed_derivatives_through_noncontiguous_inputs(tp_fn):
+    """x, y and w as transposed views of leaves: mixed derivatives to third order
+    reach the leaves and equal e3nn's (a contiguous copy saved inside the forward
+    would cut the graph to the caller's tensor)."""
+    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+
+    torch.manual_seed(5)
+    tp = tp_fn().to('mps')
+    N, E = 7, 23
+    idx = torch.randint(0, N - 1, (2, E), device='mps')
+    X = torch.randn(tp.irreps_in1.dim, N, device='mps', requires_grad=True)
+    Y = torch.randn(tp.irreps_in2.dim, E, device='mps', requires_grad=True)
+    W = torch.randn(tp.weight_numel, E, device='mps', requires_grad=True)
+    K = FusedTP(tp)
+
+    def ref(x, y, w):
+        return torch.zeros(N, tp.irreps_out.dim, device='mps').index_add(
+            0, idx[0], tp(x[idx[1]], y, w)
+        )
+
+    def fused(x, y, w):
+        return FusedUvu.apply(x, y, w, K, EdgePlan().get(idx, N))
+
+    probe = torch.randn(N, tp.irreps_out.dim, device='mps')
+    got = {}
+    for name, f in (('ref', ref), ('fused', fused)):
+        out = f(X.t(), Y.t(), W.t())
+        # out is linear in x: square it, so that every level below depends on X
+        (gx,) = torch.autograd.grad((out.pow(2) * probe).sum(), X, create_graph=True)
+        gyw = torch.autograd.grad(gx.pow(2).sum(), (Y, W), create_graph=True)
+        (gxx,) = torch.autograd.grad(sum(g.pow(2).sum() for g in gyw), X)
+        got[name] = [out.detach(), gx.detach(), *[g.detach() for g in gyw], gxx]
+    for k, (a, b) in enumerate(zip(got['ref'], got['fused'])):
+        assert float((a - b).abs().max()) < 2e-5 * max(float(a.abs().max()), 1e-6), k
+
+
+@needs_mps
 def test_kernels_with_unequal_multiplicities_equal_e3nn():
     from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
 
@@ -1881,9 +1919,20 @@ def test_trainer_pads_every_batch(monkeypatch):
         lambda d: seen.append(d[KEY.EDGE_IDX].shape[1]) or fwd(d),
     )
     graphs = [_graph(seed=s, sheared=s % 2 == 1) for s in range(1, 6)]
-    loader = DataLoader(graphs, batch_size=2, shuffle=True)
-    tr.run_one_epoch(loader, is_train=False)
+    loader = DataLoader(graphs, batch_size=2, shuffle=False)
+    real = [int(b[KEY.EDGE_IDX].shape[1]) for b in loader]
+
+    class _Recorder:  # what losses and metrics are given: the real edges only
+        def __init__(self):
+            self.edges = []
+
+        def update(self, out):
+            self.edges.append(int(out[KEY.EDGE_IDX].shape[1]))
+
+    rec = _Recorder()
+    tr.run_one_epoch(loader, is_train=False, error_recorder=rec)  # type: ignore
     assert seen and all(e % 256 == 0 for e in seen), seen
+    assert rec.edges == real, (rec.edges, real)
 
 
 @needs_mps

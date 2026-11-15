@@ -17,8 +17,9 @@ derivatives only.
 
 The coefficients g are read off the e3nn module itself by probing it (see probe_cg),
 so every normalisation of e3nn is reproduced. Threads own their output row (node,
-channel) or edge; nothing is written by two threads, so the result is deterministic
-and needs no atomics.
+channel) or edge; nothing is written by two threads, so a kernel gives the same bits
+for the same inputs and edge order, and needs no atomics. The rest of the model runs
+PyTorch operations, which need not be bitwise reproducible on the GPU.
 
 """
 
@@ -523,15 +524,11 @@ class FusedUvu(_UvuFwd):
             (y, (plan.num_edges, K.ny)),
             (w, (plan.num_edges, K.nw)),
         )
-        # the plan object may be rebuilt before a later backward
-        return _UvuFwd.forward(
-            ctx,
-            x.contiguous(),
-            y.contiguous(),
-            w.contiguous(),
-            K,
-            plan.__dict__.copy(),
-        )
+        # the plan object may be rebuilt before a later backward. The inputs are
+        # saved as given: a contiguous copy made here would not be connected to the
+        # caller's graph, and higher derivatives through it would be lost; the
+        # launches make their own contiguous copies.
+        return _UvuFwd.forward(ctx, x, y, w, K, plan.__dict__.copy())
 
 
 # ---- node level: a linear map with a block-sparse matrix, optionally one matrix per
