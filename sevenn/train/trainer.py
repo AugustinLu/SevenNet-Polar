@@ -70,18 +70,6 @@ class Trainer:
 
         self.device = torch.device(device)
         self.distributed = distributed
-        self._pad = None
-        if self.device.type == 'mps':
-            # Apple GPU: fused kernels in training and validation
-            from sevenn.mps.modules import check_torch, enable_or_warn
-
-            check_torch('training')
-            if os.environ.get('SEVENNET_MPS_OPT') != 'off':
-                if enable_or_warn(self.model, 'training') is not None:
-                    # few batch shapes, or the MPS graph cache grows without bound
-                    from sevenn.mps.padding import BatchPadder
-
-                    self._pad = BatchPadder(self.model)
 
         optimizer_args = optimizer_args or {}
         param = [p for p in self.model.parameters() if p.requires_grad]
@@ -171,12 +159,7 @@ class Trainer:
             if is_train:
                 self.optimizer.zero_grad()
             batch = batch.to(self.device, non_blocking=True)
-            if self._pad is not None:
-                n_real = int(batch[KEY.EDGE_IDX].shape[1])
-                # losses and metrics see the real edges only
-                output = self._pad.unpad(self.model(self._pad(batch)), n_real)
-            else:
-                output = self.model(batch)
+            output = self.model(batch)
             if error_recorder is not None:
                 error_recorder.update(output)
             if is_train:

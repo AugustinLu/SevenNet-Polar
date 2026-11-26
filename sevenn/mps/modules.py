@@ -1,5 +1,4 @@
-"""Apple GPU (MPS) execution of a SevenNet model: same weights, same results to
-float32 noise, much faster.
+"""Fused modules on the Apple GPU: same weights, same results to float32 noise.
 
 enable(model) switches supported modules to subclasses that run fused Metal kernels
 (sevenn/mps/kernels.py). Convolutions run the kernels in eval and train mode, with
@@ -7,17 +6,17 @@ derivatives to any order, so force training works. Linear, self-connection and g
 layers run kernels in eval mode, and in train mode a few PyTorch operations built
 from the same tables, which autograd differentiates to any order; a layout they
 do not cover keeps the e3nn code. Nothing is registered in the state dict;
-disable(model) undoes it, and enable() again starts from scratch.
-SevenNetCalculator imports this only for device='mps' or an explicit mps_opt.
-pad_edges() keeps tensor shapes stable across MD steps.
+disable(model) undoes it, and enable() again starts from scratch. runtime.py calls
+both when a model moves to or from the Apple GPU.
 
 In eval mode the kernels treat the weights of linear and self-connection layers as
 constants: derivatives with respect to positions, strain and field are complete,
-parameter gradients are not. For those use train mode or disable(). Changes through
+parameter gradients are not. For those use train mode or move the model off the
+Apple GPU. Changes through
 load_state_dict, an optimizer or in-place operations on a parameter are noticed
 before the next call (parameter identity and version counter), and module conversions
 (.to, .half, .float) drop the derived tables; writes through param.data are not
-noticed, call disable() and enable() after those.
+noticed, move the model to the CPU and back after those.
 
 """
 
@@ -780,19 +779,6 @@ def check_torch(purpose: str) -> None:
             f'message scatter (scatter_reduce) on MPS. The fused kernels need '
             f'2.7 or later.'
         )
-
-
-def enable_or_warn(model, purpose: str) -> Optional[Dict[str, int]]:
-    """enable() for the Trainer and `sevenn inference` on device='mps', or a warning
-    and the e3nn code where this PyTorch cannot compile Metal kernels, as in the
-    calculator."""
-    if not hasattr(torch.mps, 'compile_shader'):
-        warnings.warn(
-            f'{purpose} with the reference e3nn code on the GPU: torch '
-            f'{torch.__version__} has no torch.mps.compile_shader'
-        )
-        return None
-    return enable(model)
 
 
 def _drop(m, *names) -> None:

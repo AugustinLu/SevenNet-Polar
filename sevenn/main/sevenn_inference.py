@@ -2,6 +2,7 @@ import argparse
 import glob
 import os
 import sys
+import warnings
 
 description = (
     'evaluate sevenn_data/ase readable with a model (checkpoint).'
@@ -24,10 +25,7 @@ def add_args(parser):
         '--device',
         type=str,
         default='auto',
-        help=(
-            'cpu/cuda/cuda:x/mps. mps runs fused Metal kernels on the Apple GPU '
-            '(SEVENNET_MPS_OPT=off for e3nn); auto picks cuda or cpu'
-        ),
+        help='cpu/cuda/cuda:x/mps',
     )
     ag.add_argument(
         '-nw',
@@ -91,10 +89,7 @@ def add_args(parser):
     ag.add_argument(
         '-mps',
         '--enable_mps',
-        help=(
-            'use fused Metal kernels on the Apple GPU (device mps; '
-            'SEVENNET_MPS_OPT=off for e3nn)'
-        ),
+        help=argparse.SUPPRESS,
         action='store_true',
     )
     ag.add_argument(
@@ -125,18 +120,8 @@ def run(args):
         raise FileExistsError(f'Directory {out} already exists')
 
     device = args.device
-    if args.enable_mps:
-        if args.enable_cueq or args.enable_flash or args.enable_oeq:
-            raise ValueError(
-                '--enable_mps runs on the Apple GPU: it cannot be combined with '
-                'cuEquivariance, FlashTP or OpenEquivariance'
-            )
-        if device not in ('auto', 'mps'):
-            raise ValueError(f'--enable_mps runs on device mps, not {device}')
-        if not torch.backends.mps.is_available():
-            raise RuntimeError(
-                '--enable_mps needs an Apple GPU; MPS is not available'
-            )
+    if args.enable_mps:  # SevenNet-Polar 0.3; --device mps does the same
+        warnings.warn('--enable_mps is deprecated: use --device mps', DeprecationWarning)
         device = 'mps'
     if device == 'auto':
         device = 'cuda' if torch.cuda.is_available() else 'cpu'

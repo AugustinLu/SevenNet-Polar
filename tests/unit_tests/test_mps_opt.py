@@ -4,6 +4,8 @@ where no Apple GPU exists: a skip is not a pass."""
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
+from unittest import mock
 from pathlib import Path
 
 import numpy as np
@@ -19,11 +21,11 @@ import sevenn.train.dataload as dl
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.calculator import SevenNetCalculator
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn.mps import padding as mps_padding
+from sevenn import mps
 from sevenn.mps import runtime as mps_runtime
 from sevenn.mps.kernels import generate_msl, probe_cg
 from sevenn.mps.modules import mps_torch_supported
-from sevenn.mps.padding import pad_edges, padding_is_safe
+from sevenn.mps.padding import pad, padding_is_safe, unpad
 from sevenn.util import chemical_species_preprocess
 
 needs_mps = pytest.mark.skipif(
@@ -116,8 +118,20 @@ def _close(a, b, rel=2e-5):
         assert float((a[k] - b[k]).abs().max()) < rel * scale, k
 
 
+def _fused(model):
+    return any(type(m).__name__.startswith('Fused') for m in model.modules())
+
+
+def _e3nn_on_gpu(model):
+    """A model on the Apple GPU running the reference e3nn code: the tests switch the
+    kernels on themselves."""
+    model.to('mps')
+    mps.restore(model)
+    return model
+
+
 def _model(method='direct', **kw):
-    model = _build(_config(method=method, **kw)).to('mps')
+    model = _e3nn_on_gpu(_build(_config(method=method, **kw)))
     model.set_is_batch_data(False)
     return model.eval()
 
@@ -151,18 +165,27 @@ def test_generated_source_has_all_kernels():
         assert f'kernel void {k}(' in src
 
 
-def test_pad_edges_shapes_and_noop():
-    g = dl.unlabeled_atoms_to_graph(bulk('NaCl', 'rocksalt', a=5.63), 4.0)
-    n = g['edge_index'].shape[1]
-    assert pad_edges(g, 4.0, 1) is g
-    assert pad_edges(g, 4.0, 0) is g
-    assert pad_edges(g, 4.0, n) is g
-    p = pad_edges(g, 4.0, n + 7)
-    assert p['edge_index'].shape[1] == n + 7 and p['edge_vec'].shape[0] == n + 7
-    assert np.all(p['edge_index'][:, n:] == 0) and np.all(
-        p['edge_vec'][n:, 0] == 4.0
-    )
-    assert g['edge_index'].shape[1] == n  # input untouched
+def test_pad_shapes_noop_and_unpad():
+    def graph():
+        return AtomGraphData.from_numpy_dict(
+            dl.unlabeled_atoms_to_graph(bulk('NaCl', 'rocksalt', a=5.63), 4.0)
+        )
+
+    plan = SimpleNamespace(expect_padded=None)
+    g = graph()
+    n = g[KEY.EDGE_IDX].shape[1]
+    for bucket in (0, 1, n):
+        assert pad(g, 4.0, bucket, plan) is None and g[KEY.EDGE_IDX].shape[1] == n
+    assert plan.expect_padded is None
+    assert pad(g, 4.0, n + 7, plan) == n
+    assert g[KEY.EDGE_IDX].shape[1] == n + 7 and g[KEY.EDGE_VEC].shape[0] == n + 7
+    assert plan.expect_padded == (n, n + 7)
+    assert bool((g[KEY.EDGE_IDX][:, n:] == 0).all())
+    assert bool((g[KEY.EDGE_VEC][n:, 0] == 4.0).all())
+    ref = graph()
+    unpad(g, n)
+    for key in (KEY.EDGE_IDX, KEY.EDGE_VEC):
+        assert torch.equal(g[key], ref[key])
 
 
 @pytest.mark.parametrize('method', METHODS)
@@ -190,23 +213,27 @@ def test_cuda_and_cpu_paths_do_not_import_the_apple_code():
     code = (
         'import sys, numpy, sevenn.calculator, sevenn.model_build, '
         'sevenn.checkpoint, sevenn.scripts.deploy\n'
+        "m = sevenn.calculator.SevenNetCalculator('7net-0', device='cpu').model\n"
+        "m.to('cpu').double().float()\n"
         "assert not [m for m in sys.modules if m.startswith('sevenn.mps')]\n"
     )
     subprocess.run([sys.executable, '-c', code], check=True)
 
 
-def test_fused_on_cpu_device_is_an_error():
+def test_polar_03_fused_option_on_cpu_device_is_an_error():
     model = _build(_config())
-    with pytest.raises(ValueError, match='needs device'):
-        SevenNetCalculator(
-            model, file_type='model_instance', device='cpu', mps_opt='fused'
-        )
-    with pytest.raises(ValueError, match="must be 'fused' or 'off'"):
-        SevenNetCalculator(
-            model, file_type='model_instance', device='cpu', mps_opt='yes'
-        )
+    with pytest.warns(DeprecationWarning, match='mps_opt'):
+        with pytest.raises(ValueError, match='needs device'):
+            SevenNetCalculator(
+                model, file_type='model_instance', device='cpu', mps_opt='fused'
+            )
+    with pytest.warns(DeprecationWarning, match='mps_opt'):
+        with pytest.raises(ValueError, match="must be 'fused' or 'off'"):
+            SevenNetCalculator(
+                model, file_type='model_instance', device='cpu', mps_opt='yes'
+            )
     calc = SevenNetCalculator(model, file_type='model_instance', device='cpu')
-    assert calc.mps_runtime is None
+    assert '_mps' not in calc.model.__dict__
 
 
 # ---- Apple GPU ----
@@ -251,7 +278,7 @@ def test_load_state_dict_after_enable_refreshes_the_tables():
     from sevenn.mps import modules as mps_opt
 
     graph = _graph()
-    other = _build(_config(), seed=7).to('mps')
+    other = _e3nn_on_gpu(_build(_config(), seed=7))
     other.set_is_batch_data(False)
     other.eval()
     ref = _run(other, graph)
@@ -535,33 +562,35 @@ def test_pad_edges_are_silent_in_fused_kernels(method, bucket):
     at = bulk('NaCl', 'rocksalt', a=5.63).repeat((2, 1, 1))
     at.rattle(0.05, seed=3)
     g0 = dl.unlabeled_atoms_to_graph(at, 4.0)
-    padded = pad_edges(g0, 4.0, bucket)
-    assert padded is not g0
-    num_real = g0['edge_index'].shape[1]
     ref = _run(model, AtomGraphData.from_numpy_dict(dict(g0)))
-    model._mps_plan.expect_padded = (num_real, padded['edge_index'].shape[1])
-    out = _run(model, AtomGraphData.from_numpy_dict(dict(padded)))
+
+    def padded(plan):
+        g = AtomGraphData.from_numpy_dict(dict(g0)).to('mps')
+        assert pad(g, 4.0, bucket, plan) == g0['edge_index'].shape[1]
+        return g
+
+    g = padded(model._mps_plan)  # the plan is told which edges are pads
+    out = model(g)
+    out = {k: out[k].detach().cpu() for k in KEYS if k in out}
     for k in (KEY.PRED_TOTAL_ENERGY, KEY.PRED_FORCE, KEY.PRED_STRESS):
         assert float((ref[k] - out[k]).abs().max()) < 3e-5 * max(
             float(ref[k].abs().max()), 1.0
         ), k
     # padded but treated as real edges: same result, and all derivatives finite
-    out = _run(model, AtomGraphData.from_numpy_dict(dict(padded)))
+    out = _run(model, padded(SimpleNamespace(expect_padded=None)))
     for k, v in out.items():
         assert torch.isfinite(v).all(), k
     _close(ref, out)
 
 
-def _calc_pair(method='direct', **kw):
+def _calc_pair(method='direct', bucket=None):
+    """Reference and fused calculators, on two instances of the same model."""
     cfg = _config(method=method)
-    model = _build(cfg)
-    a = SevenNetCalculator(
-        model, file_type='model_instance', device='mps', mps_opt='off'
-    )
-    b = SevenNetCalculator(
-        model, file_type='model_instance', device='mps', mps_opt='fused', **kw
-    )
-    return a, b, model
+    a = _calc(_build(cfg), off=True)
+    b = _calc(_build(cfg))
+    if bucket is not None:
+        mps.prepare(b.model, bucket=bucket)
+    return a, b
 
 
 @needs_mps
@@ -570,50 +599,46 @@ def _calc_pair(method='direct', **kw):
 def test_default_calculator_really_pads_on_the_gpu(method, cutoff):
     model = _build(_config(method=method, cutoff=cutoff))
     calc = SevenNetCalculator(model, file_type='model_instance', device='mps')
-    assert calc.mps_runtime.mode == 'fused' and calc.mps_runtime.bucket == 256
+    assert _fused(calc.model) and calc.model._mps.bucket == 256
     at = bulk('NaCl', 'rocksalt', a=5.63).repeat((2, 1, 1))
     at.rattle(0.05, seed=3)
     at.calc = calc
     at.get_forces()
-    assert calc.mps_runtime.plan.num_edges % 256 == 0
-    assert (
-        calc.mps_runtime.plan.num_real
-        == calc.results['num_edges']
-        < calc.mps_runtime.plan.num_edges
-    )
+    plan = calc.model._mps_plan
+    n = dl.unlabeled_atoms_to_graph(at, cutoff)['edge_index'].shape[1]
+    assert plan.num_edges % 256 == 0 and plan.num_real == n < plan.num_edges
 
 
 @needs_mps
-def test_calculator_copies_a_shared_instance_and_reports_real_edges():
-    a, b, model = _calc_pair()
-    assert (
-        b.model is not model
-        and type(
-            next(m for m in model.modules() if hasattr(m, 'convolution'))
-        ).__name__
-        == 'IrrepsConvolution'
-    )
-    assert b.mps_runtime.report['conv_fused'] == 3 and a.mps_runtime.mode == 'off'
+def test_calculator_fuses_the_instance_it_is_given_and_drops_the_pad_edges():
+    model = _build(_config())
+    b = _calc(model)
+    a = _calc(_build(_config()), off=True)
+    assert b.model is model and _fused(model)  # moving it to 'mps' switched it
+    assert mps.report(model)['conv_fused'] == 3 and mps.report(a.model) == {}
     at = bulk('NaCl', 'rocksalt', a=5.63).repeat((2, 1, 1))
     at.rattle(0.05, seed=3)
-    n = None
+    seen = []
+    b.model.register_forward_hook(
+        lambda m, args, out: seen.append(int(out[KEY.EDGE_IDX].shape[1]))
+    )
     for dx in (0.0, 0.03, 0.2):  # the edge count changes
         at.positions += np.random.default_rng(1).normal(
             0, dx + 1e-3, at.positions.shape
         )
         at.calc = a
         fa, ea = at.get_forces(), at.get_potential_energy()
-        n = a.results['num_edges']
         at.calc = b
         fb, eb = at.get_forces(), at.get_potential_energy()
-        assert b.results['num_edges'] == n
+        n = dl.unlabeled_atoms_to_graph(at, 4.0)['edge_index'].shape[1]
+        assert seen[-1] == n  # the output carries the real edges only
         assert abs(ea - eb) < 1e-3 and np.abs(fa - fb).max() < 2e-4
 
 
 @needs_mps
 @pytest.mark.parametrize('bucket', [0, 256])
 def test_isolated_atoms_without_edges(bucket):
-    a, b, _ = _calc_pair(mps_edge_bucket=bucket)
+    a, b = _calc_pair(bucket=bucket)
     at = Atoms(
         'NaCl',
         positions=[[0, 0, 0], [30.0, 0, 0]],
@@ -625,7 +650,7 @@ def test_isolated_atoms_without_edges(bucket):
     at.calc = b
     eb, fb = at.get_potential_energy(), at.get_forces()
     assert abs(ea - eb) < 1e-4 and np.all(fa == 0.0) and np.all(fb == 0.0)
-    assert b.results['num_edges'] == 0
+    assert b.model._mps.n_real is None  # nothing to pad
 
 
 @needs_mps
@@ -635,9 +660,9 @@ def test_train_mode_runs_the_kernels_and_supports_force_training(
 ):
     from sevenn.mps import modules as mps_opt
 
-    ref = _build(_config(method=method)).to('mps')
+    ref = _e3nn_on_gpu(_build(_config(method=method)))
     ref.set_is_batch_data(False)
-    model = _build(_config(method=method)).to('mps')
+    model = _e3nn_on_gpu(_build(_config(method=method)))
     model.set_is_batch_data(False)
     rep = mps_opt.enable(model)
     assert rep['conv_fused'] > 0 and rep['conv_e3nn'] == 0
@@ -684,8 +709,8 @@ def test_train_mode_has_second_derivatives_also_with_unequal_channels():
             irreps_manual=['8x0e', '8x0e+4x1o+2x2e', '8x0e+4x1o+2x2e', '8x0e'],
         ),
     ):
-        ref = _build(_config(**kw)).to('mps')
-        model = _build(_config(**kw)).to('mps')
+        ref = _e3nn_on_gpu(_build(_config(**kw)))
+        model = _e3nn_on_gpu(_build(_config(**kw)))
         for m in (ref, model):
             m.set_is_batch_data(False)
         rep = mps_opt.enable(model)
@@ -717,8 +742,8 @@ def test_train_mode_node_layers_avoid_e3nn_and_equal_it(all_types, monkeypatch):
     from sevenn.mps import modules as mps_opt
 
     graph = _graph()
-    ref = _build(_config()).to('mps')
-    model = _build(_config()).to('mps')
+    ref = _e3nn_on_gpu(_build(_config()))
+    model = _e3nn_on_gpu(_build(_config()))
     for m in (ref, model):
         m.set_is_batch_data(False)
         m.train()
@@ -778,13 +803,13 @@ def test_trainer_switches_on_only_for_the_apple_gpu(monkeypatch):
 
     for device, env, expect in (
         ('mps', None, True),
-        ('mps', 'off', False),
+        ('mps', '1', False),
         ('cpu', None, False),
     ):
         if env is None:
-            monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
+            monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
         else:
-            monkeypatch.setenv('SEVENNET_MPS_OPT', env)
+            monkeypatch.setenv('SEVENN_DISABLE_MPS', env)
         tr = Trainer(_build(_config()), [], torch.optim.Adam, device=device)
         assert (
             any(isinstance(m, mps_opt.FusedConvolution) for m in tr.model.modules())
@@ -846,26 +871,26 @@ def test_stale_padding_announcement_does_not_cut_edges():
 
 
 @needs_mps
-def test_instance_under_default_file_type_is_not_switched():
+def test_instance_under_default_file_type():
     model = _build(_config())
     calc = SevenNetCalculator(model, device='mps')
-    assert calc.model is not model and calc.mps_runtime.mode == 'fused'
-    assert type(model._modules['0_convolution']).__name__ == 'IrrepsConvolution'
+    assert _fused(calc.model) and mps.report(calc.model)['conv_fused'] == 3
 
 
 @needs_mps
-def test_fused_instance_with_off_runs_e3nn_and_leaves_the_input_fused():
-    from sevenn.mps import modules as mps_opt
-
-    model = _model()
-    mps_opt.enable(model)
-    calc = SevenNetCalculator(
-        model, file_type='model_instance', device='mps', mps_opt='off'
-    )
-    assert type(calc.model._modules['0_convolution']).__name__ == 'IrrepsConvolution'
-    assert type(model._modules['0_convolution']).__name__ == 'FusedConvolution'
-    calc = SevenNetCalculator(model, device='mps', mps_opt='fused')
-    assert calc.mps_runtime.report['conv_fused'] == 3
+def test_polar_03_mps_opt_still_works():
+    model = _build(_config())
+    with pytest.warns(DeprecationWarning, match='mps_opt'):
+        calc = SevenNetCalculator(
+            model, file_type='model_instance', device='mps', mps_opt='off'
+        )
+    assert not _fused(calc.model) and mps.report(calc.model) == {}
+    with pytest.warns(DeprecationWarning, match='mps_opt'):
+        calc = SevenNetCalculator(
+            model, file_type='model_instance', device='mps', mps_edge_bucket=64
+        )
+    assert mps.report(calc.model)['conv_fused'] == 3
+    assert calc.model._mps.bucket == 64
 
 
 @needs_mps
@@ -875,7 +900,7 @@ def test_deepcopy_after_load_state_dict_uses_the_new_weights():
     from sevenn.mps import modules as mps_opt
 
     graph = _graph()
-    other = _build(_config(), seed=7).to('mps')
+    other = _e3nn_on_gpu(_build(_config(), seed=7))
     other.set_is_batch_data(False)
     other.eval()
     ref = _run(other, graph)
@@ -1038,15 +1063,18 @@ def test_pair_style_clear_errors(tmp_path, coeff, message):
         _pair_lammps(tmp_path, at, coeff)
 
 
+def _calc(model, off=False, **kw):
+    """A calculator on the Apple GPU; off: the opt-out (reference e3nn code)."""
+    with mock.patch.dict(os.environ, {'SEVENN_DISABLE_MPS': '1' if off else ''}):
+        return SevenNetCalculator(
+            model, file_type='model_instance', device='mps', **kw
+        )
+
+
 def _fused_against_off(at, **kw):
     results = []
-    for mode in ('off', 'fused'):
-        calc = SevenNetCalculator(
-            _build(_config(**kw)),
-            file_type='model_instance',
-            device='mps',
-            mps_opt=mode,
-        )
+    for off in (True, False):
+        calc = _calc(_build(_config(**kw)), off=off)
         a = at.copy()
         a.calc = calc
         results.append(
@@ -1100,7 +1128,7 @@ def test_lmax_4(method):
     (e0, f0, s0, _), (e1, f1, s1, calc) = _fused_against_off(
         at, method=method, lmax=4, channel=4
     )
-    report = calc.mps_runtime.report
+    report = mps.report(calc.model)
     assert report['conv_e3nn'] == 0 and report['conv_fused'] > 0
     assert abs(e0 - e1) < 1e-3
     assert np.abs(f0 - f1).max() < 1e-4
@@ -1111,9 +1139,7 @@ def test_lmax_4(method):
 def test_weights_loaded_on_the_cpu_are_used_after_moving_back():
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     at.rattle(0.05, seed=2)
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='fused'
-    )
+    calc = _calc(_build(_config()))
     a = at.copy()
     a.calc = calc
     e0 = a.get_potential_energy()
@@ -1128,9 +1154,7 @@ def test_weights_loaded_on_the_cpu_are_used_after_moving_back():
     calc.reset()  # ASE would return the cached result for the same geometry
     a = at.copy()
     a.calc = calc
-    ref = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='off'
-    )
+    ref = _calc(_build(_config()), off=True)
     ref.model.load_state_dict({k: v.to('mps') for k, v in state.items()})
     b = at.copy()
     b.calc = ref
@@ -1143,17 +1167,17 @@ def test_weights_loaded_on_the_cpu_are_used_after_moving_back():
 def test_enable_refuses_other_float_types():
     from sevenn.mps.modules import enable
 
-    model = _build(_config()).to('mps').to(torch.float16)
+    model = _e3nn_on_gpu(_build(_config())).to(torch.float16)
     with pytest.raises(ValueError, match='float32'):
         enable(model)
 
 
 @needs_mps
-def test_failed_call_leaves_no_padding_note():
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='fused'
-    )
+def test_failed_call_leaves_no_padding_note_for_the_next_graph():
+    calc = _calc(_build(_config()))
+    ref = _calc(_build(_config()), off=True)
     a = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
+    a.rattle(0.05, seed=5)
     a.calc = calc
 
     def boom(data):
@@ -1163,35 +1187,30 @@ def test_failed_call_leaves_no_padding_note():
     calc.model.forward = boom
     with pytest.raises(RuntimeError, match='boom'):
         a.get_potential_energy()
-    assert calc.mps_runtime.plan.expect_padded is None
+    plan = calc.model._mps_plan
+    assert plan.expect_padded is not None  # the hook ran, the call failed
     calc.model.forward = good
-    assert np.isfinite(a.get_potential_energy())
+    b = a.copy()
+    b.calc = ref
+    assert abs(a.get_potential_energy() - b.get_potential_energy()) < 1e-3
+    assert np.abs(a.get_forces() - b.get_forces()).max() < 1e-4
+    assert plan.expect_padded is None
 
 
 @needs_mps
-def test_no_padding_with_a_convolution_left_on_e3nn():
-    from sevenn.mps.modules import enable
-    from sevenn.mps.runtime import MpsRuntime
-
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='off'
-    )
-    real = enable
+def test_no_padding_with_a_convolution_left_on_e3nn(monkeypatch):
+    real = mps_runtime.enable
 
     def partly(model, parts='all'):
         report = real(model, 'linear+selfconn+gate')
         report['conv_e3nn'] = 1
         return report
 
-    import sevenn.mps.runtime as opt
-
-    opt.enable = partly
-    try:
-        with pytest.warns(UserWarning, match='padding disabled'):
-            rt = MpsRuntime(calc.model, 'fused', 256, calc.cutoff)
-    finally:
-        opt.enable = real
-    assert rt.bucket == 0
+    monkeypatch.setattr(mps_runtime, 'enable', partly)
+    model = _build(_config())
+    with pytest.warns(UserWarning, match='padding disabled'):
+        model.to('mps')
+    assert model._mps.bucket == 0 and not model._forward_pre_hooks
 
 
 class _FakeLammps:
@@ -1328,9 +1347,7 @@ def test_pair_style_refuses_an_empty_box():
 def test_autocast_never_reaches_the_kernels():
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     at.rattle(0.05, seed=2)
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='fused'
-    )
+    calc = _calc(_build(_config()))
     at.calc = calc
     with torch.autocast(device_type='mps', dtype=torch.float16):
         try:
@@ -1341,9 +1358,7 @@ def test_autocast_never_reaches_the_kernels():
 
 
 def _fused_convolution():
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='fused'
-    )
+    calc = _calc(_build(_config()))
     conv = calc.model._modules['0_convolution']
     K = conv._kernels
     idx = torch.tensor([[0, 1, 2, 3], [1, 0, 3, 2]], device='mps')
@@ -1433,9 +1448,7 @@ def test_output_irrep_with_more_channels_is_refused():
 
 @needs_mps
 def test_self_connection_uses_e3nn_when_types_carry_gradients():
-    calc = SevenNetCalculator(
-        _build(_config()), file_type='model_instance', device='mps', mps_opt='fused'
-    )
+    calc = _calc(_build(_config()))
     tp = calc.model._modules['0_self_connection_intro'].fc_tensor_product
     x = torch.randn(3, tp.irreps_in1.dim, device='mps')
     y = torch.tensor(
@@ -1593,7 +1606,7 @@ def test_conversions_drop_the_derived_tables():
     _run(model, graph)
     model.half()
     model.float()
-    ref = _build(_config()).to('mps').eval()
+    ref = _e3nn_on_gpu(_build(_config())).eval()
     ref.set_is_batch_data(False)
     ref.load_state_dict(model.state_dict())
     _close(_run(ref, graph), _run(model, graph))
@@ -1613,7 +1626,7 @@ def test_autocast_takes_the_reference_path_in_node_layers():
     from sevenn.mps import modules as mps_opt
 
     species = ('H', 'Li', 'C', 'N', 'O', 'F', 'Na', 'Mg', 'Al', 'Cl')
-    model = _build(_config(species=species)).to('mps').train()
+    model = _e3nn_on_gpu(_build(_config(species=species))).train()
     mps_opt.enable(model)
     sc = [m for m in model.modules() if isinstance(m, mps_opt.FusedSelfConnection)]
     assert sc and sc[0].irreps_in2.dim > mps_opt.SELFCONN_ALL_TYPES
@@ -1637,11 +1650,11 @@ def test_eval_after_training_uses_the_new_weights(many_types):
         else ('Na', 'Cl')
     )
     cfg = _config(species=species, use_bias_in_linear=True)
-    model = _build(cfg).to('mps')
+    model = _e3nn_on_gpu(_build(cfg))
     model.set_is_batch_data(False)
     mps_opt.enable(model)
     graph = _graph()
-    ref = _build(cfg).to('mps').eval()
+    ref = _e3nn_on_gpu(_build(cfg)).eval()
     ref.set_is_batch_data(False)
     for _ in range(2):  # the second epoch only updates the values of the map
         model.train()
@@ -1665,14 +1678,13 @@ def test_eval_after_training_uses_the_new_weights(many_types):
 
 @needs_mps
 def test_trainer_keeps_e3nn_without_compile_shader(monkeypatch):
-    from sevenn.mps import modules as mps_opt
     from sevenn.train.trainer import Trainer
 
-    monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
+    monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
     monkeypatch.delattr(torch.mps, 'compile_shader')
     with pytest.warns(UserWarning, match='compile_shader'):
         tr = Trainer(_build(_config()), [], torch.optim.Adam, device='mps')
-    assert not any(isinstance(m, mps_runtime._FUSED) for m in tr.model.modules())
+    assert not _fused(tr.model) and mps.report(tr.model) == {}
 
 
 @pytest.mark.skipif(
@@ -1684,12 +1696,9 @@ def test_old_pytorch_is_refused_with_a_clear_error(monkeypatch):
     from sevenn.train.trainer import Trainer
 
     monkeypatch.setattr(mps_opt, '_MPS_TORCH_OK', False)
-    for opt in (None, 'off'):
+    for off in (False, True):
         with pytest.raises(RuntimeError, match='PyTorch 2.6 or later'):
-            SevenNetCalculator(
-                _build(_config()), file_type='model_instance', device='mps',
-                mps_opt=opt,
-            )
+            _calc(_build(_config()), off=off)
     with pytest.raises(RuntimeError, match='PyTorch 2.6 or later'):
         Trainer(_build(_config()), [], torch.optim.Adam, device='mps')
 
@@ -1763,22 +1772,27 @@ def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
     from unittest import mock
 
     from sevenn.main.sevenn_inference import main as inference_main
-    from sevenn.mps import modules as mps_opt
 
     data = Path(__file__).parents[1] / 'data'
     if opt == 'off':
-        monkeypatch.setenv('SEVENNET_MPS_OPT', 'off')
+        monkeypatch.setenv('SEVENN_DISABLE_MPS', '1')
     else:
-        monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
+        monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
     reports = []
-    enable = mps_opt.enable
-    monkeypatch.setattr(mps_opt, 'enable', lambda m: reports.append(enable(m)))
+    enable = mps_runtime.enable
+    monkeypatch.setattr(
+        mps_runtime, 'enable', lambda m: reports.append(enable(m)) or reports[-1]
+    )
     out = tmp_path / 'inference_results'
     device = ['--enable_mps'] if opt == 'flag' else ['--device', 'mps']
     argv = ['sevenn_inference', '--output', str(out), '--batch', '2', *device,
             '7net-0', str(data / 'systems' / 'hfo2.extxyz')]
     with mock.patch('sys.argv', argv):
-        inference_main()
+        if opt == 'flag':  # SevenNet-Polar 0.3
+            with pytest.warns(DeprecationWarning, match='--device mps'):
+                inference_main()
+        else:
+            inference_main()
 
     def errors(path):
         lines = (path / 'errors.txt').read_text().splitlines()
@@ -1793,23 +1807,14 @@ def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
         assert not reports
 
 
-@pytest.mark.parametrize(
-    'argv, message',
-    [
-        (['inference', '-mps', '-flashTP', 'x.pth', 'y.xyz'], 'cannot be combined'),
-        (['inference', '-mps', '-d', 'cpu', 'x.pth', 'y.xyz'], 'not cpu'),
-        (['train', '-mps', '-cueq', 'input.yaml'], 'cannot be combined'),
-    ],
-)
-def test_enable_mps_flag_refuses_other_backends(argv, message, tmp_path):
-    from unittest import mock
-
-    from sevenn.main.sevenn import main as sevenn_main
-
-    os.chdir(tmp_path)
-    with mock.patch('sys.argv', ['sevenn'] + argv):
-        with pytest.raises(ValueError, match=message):
-            sevenn_main()
+def test_cuda_only_tensor_products_are_refused_on_the_apple_gpu():
+    model = _build(_config())
+    conv = next(m for m in model.modules() if hasattr(m, 'convolution'))
+    conv.convolution = torch.nn.Identity()  # stands for cuEquivariance, FlashTP...
+    if not (torch.backends.mps.is_available() and mps_torch_supported()):
+        return
+    with pytest.raises(ValueError, match='Identity: build it without enable_cueq'):
+        model.to('mps')
 
 
 @needs_mps
@@ -1820,12 +1825,13 @@ def test_sevenn_train_with_enable_mps(tmp_path, monkeypatch):
 
     from sevenn.logger import Logger
     from sevenn.main.sevenn import main as sevenn_main
-    from sevenn.mps import modules as mps_opt
 
-    monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
+    monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
     reports = []
-    enable = mps_opt.enable
-    monkeypatch.setattr(mps_opt, 'enable', lambda m: reports.append(enable(m)))
+    enable = mps_runtime.enable
+    monkeypatch.setattr(
+        mps_runtime, 'enable', lambda m: reports.append(enable(m)) or reports[-1]
+    )
     root = Path(__file__).parents[2]
     data = str(root / 'tests' / 'data' / 'systems' / 'hfo2.extxyz')
     cfg = yaml.safe_load(open(root / 'sevenn' / 'presets' / 'base.yaml'))
@@ -1838,7 +1844,8 @@ def test_sevenn_train_with_enable_mps(tmp_path, monkeypatch):
     Logger().switch_file(str(tmp_path / 'log.sevenn'))
     argv = ['sevenn', 'train', '-w', str(tmp_path), '--enable_mps', str(yml)]
     with mock.patch('sys.argv', argv):
-        sevenn_main()
+        with pytest.warns(DeprecationWarning, match='device: mps'):
+            sevenn_main()
     assert len(reports) == 1 and reports[0]['conv_fused'] > 0
     ckpt = torch.load(tmp_path / 'checkpoint_best.pth', weights_only=False)
     assert ckpt['config']['device'] == 'mps'
@@ -1855,11 +1862,10 @@ def _batch(n=3):
     )
 
 
-def _step(model, batch, pad=None):
+def _step(model, batch):
     """Outputs and parameter gradients of a force-and-stress loss, as in training."""
     model.zero_grad()
-    b = batch.clone().to('mps')
-    out = model(pad(b) if pad is not None else b)
+    out = model(batch.clone().to('mps'))
     loss = (
         out[KEY.PRED_TOTAL_ENERGY].pow(2).mean()
         + out[KEY.PRED_FORCE].pow(2).mean()
@@ -1883,22 +1889,20 @@ def _step(model, batch, pad=None):
 @needs_mps
 @pytest.mark.parametrize('method', METHODS)
 def test_padded_batch_gives_the_same_training_step(method):
-    from sevenn.mps import modules as mps_opt
-
     model = _build(_config(method=method)).to('mps')
-    rep = mps_opt.enable(model)
-    assert rep['conv_e3nn'] == 0
     model.set_is_batch_data(True)
     model.train()
-    pad = mps_padding.BatchPadder(model, bucket=64)
-    assert pad.bucket == 64
+    assert mps.prepare(model, bucket=0)['conv_e3nn'] == 0  # fused, not padded
     batch = _batch()
     n_real = int(batch[KEY.EDGE_IDX].shape[1])
     assert n_real % 64 != 0
     ref, gref, _ = _step(model, batch)
-    got, ggot, n_all = _step(model, batch, pad)
-    assert n_all % 64 == 0 and n_all > n_real
-    assert model._mps_plan.num_real == n_real  # the kernels saw only the real edges
+    mps.prepare(model, bucket=64)
+    got, ggot, n_out = _step(model, batch)
+    plan = model._mps_plan
+    assert plan.num_edges % 64 == 0 and plan.num_edges > n_real
+    assert plan.num_real == n_real  # the kernels saw only the real edges
+    assert n_out == n_real  # and the output has them only
     _close(ref, got, rel=1e-5)
     assert gref.keys() == ggot.keys()
     for n in gref:
@@ -1912,9 +1916,9 @@ def test_trainer_pads_every_batch(monkeypatch):
 
     from sevenn.train.trainer import Trainer
 
-    monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
+    monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
     tr = Trainer(_build(_config()), [], torch.optim.Adam, device='mps')
-    assert tr._pad is not None and tr._pad.bucket == 256
+    assert tr.model._mps.bucket == 256
     seen = []
     fwd = tr.model.forward
     monkeypatch.setattr(
@@ -1940,37 +1944,25 @@ def test_trainer_pads_every_batch(monkeypatch):
 
 
 @needs_mps
-def test_unpad_restores_the_edges_of_an_output():
-    from sevenn.mps import modules as mps_opt
-
+def test_output_and_input_keep_the_real_edges_only():
     model = _build(_config()).to('mps')
-    mps_opt.enable(model)
+    mps.prepare(model, bucket=64)
     model.set_is_batch_data(True)
     model.eval()
-    pad = mps_padding.BatchPadder(model, bucket=64)
     batch = _batch().to('mps')
     n_real = int(batch[KEY.EDGE_IDX].shape[1])
     n_atoms = int(batch[KEY.POS].shape[0])
-    out = pad.unpad(model(pad(batch.clone())), n_real)
+    idx = batch[KEY.EDGE_IDX].clone()
+    out = model(batch)
+    assert model._mps_plan.num_edges % 64 == 0  # it was padded inside
     assert out[KEY.EDGE_IDX].shape[1] == n_real
     assert out[KEY.EDGE_VEC].shape[0] == n_real
     assert out[KEY.POS].shape[0] == n_atoms
-    ref = model(batch.clone())
-    assert torch.equal(out[KEY.EDGE_IDX].cpu(), ref[KEY.EDGE_IDX].cpu())
+    assert torch.equal(out[KEY.EDGE_IDX], idx)
+    assert batch[KEY.EDGE_IDX].shape[1] == n_real  # the input object too
 
 
-@needs_mps
-def test_padder_is_off_when_a_convolution_stays_on_e3nn():
-    from sevenn.mps import modules as mps_opt
 
-    model = _build(_config()).to('mps')
-    mps_opt.enable(model)
-    conv = next(
-        m for m in model.modules() if isinstance(m, mps_opt.FusedConvolution)
-    )
-    conv.__class__ = mps_opt.IrrepsConvolution
-    with pytest.warns(UserWarning, match='edge padding of batches disabled'):
-        assert mps_padding.BatchPadder(model).bucket == 0
 
 
 @needs_mps
@@ -1997,13 +1989,81 @@ def test_multi_fidelity_model_equals_e3nn(modal):
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     at.rattle(0.05, seed=3)
     res = {}
-    for opt in (None, 'off'):
-        calc = SevenNetCalculator('7net-mf-0', device='mps', modal=modal, mps_opt=opt)
-        if opt is None:
-            assert calc.mps_runtime.report['conv_fused'] > 0
+    for off in (False, True):
+        with mock.patch.dict(os.environ, {'SEVENN_DISABLE_MPS': '1' if off else ''}):
+            calc = SevenNetCalculator('7net-mf-0', device='mps', modal=modal)
+        assert (mps.report(calc.model).get('conv_fused', 0) > 0) != off
         a = at.copy()
         a.calc = calc
-        res[opt] = (a.get_potential_energy(), a.get_forces(), a.get_stress())
-    assert abs(res[None][0] - res['off'][0]) < 1e-4
-    assert np.abs(res[None][1] - res['off'][1]).max() < 1e-4
-    assert np.abs(res[None][2] - res['off'][2]).max() < 1e-6
+        res[off] = (a.get_potential_energy(), a.get_forces(), a.get_stress())
+    assert abs(res[False][0] - res[True][0]) < 1e-4
+    assert np.abs(res[False][1] - res[True][1]).max() < 1e-4
+    assert np.abs(res[False][2] - res[True][2]).max() < 1e-6
+
+
+# ---- the model hook: moving to and from the Apple GPU ----
+
+
+@needs_mps
+def test_leaving_the_apple_gpu_restores_a_scriptable_model():
+    from e3nn.util import jit
+
+    model = _build(_config())
+    model.to('mps')
+    assert _fused(model) and model._forward_pre_hooks and model._forward_hooks
+    model.to('cpu')
+    assert not _fused(model) and '_mps' not in model.__dict__
+    assert not model._forward_pre_hooks and not model._forward_hooks
+    model.set_is_batch_data(False)
+    jit.script(model)  # as sevenn get_model does
+
+
+@needs_mps
+def test_a_copy_of_a_prepared_model_has_its_own_state():
+    import copy
+
+    model = _build(_config()).to('mps')
+    twin = copy.deepcopy(model)
+    assert _fused(twin) and twin._mps is not model._mps
+    assert twin._mps_plan is not model._mps_plan
+    twin.to('cpu')
+    assert _fused(model) and model._forward_pre_hooks  # the original is untouched
+    graph = _graph()
+    model.set_is_batch_data(False)
+    ref = _e3nn_on_gpu(_build(_config()))
+    ref.set_is_batch_data(False)
+    _close(_run(ref.eval(), graph), _run(model.eval(), graph))
+
+
+@needs_mps
+def test_float64_parameters_become_float32_and_keep_their_identity():
+    model = _build(_config())
+    shift = next(p for n, p in model.named_parameters() if 'shift' in n)
+    shift.data = shift.data.double()
+    opt = torch.optim.Adam(model.parameters())
+    model.to('mps')
+    assert shift.dtype == torch.float32 and shift.device.type == 'mps'
+    assert any(p is shift for g in opt.param_groups for p in g['params'])
+    assert all(p.dtype == torch.float32 for p in model.parameters())
+    assert _fused(model)
+
+
+@needs_mps
+def test_train_and_eval_switch_on_a_prepared_model():
+    model = _build(_config()).to('mps')
+    model.set_is_batch_data(False)
+    ref = _e3nn_on_gpu(_build(_config()))
+    ref.set_is_batch_data(False)
+    graph = _graph()
+    for mode in ('train', 'eval', 'train'):
+        getattr(model, mode)()
+        getattr(ref, mode)()
+        _close(_run(ref, graph), _run(model, graph))
+
+
+@needs_mps
+def test_half_precision_on_the_apple_gpu_keeps_the_reference_code():
+    model = _build(_config()).to('mps')
+    with pytest.warns(UserWarning, match='need float32 weights'):
+        model.half()
+    assert not _fused(model) and mps.report(model) == {}

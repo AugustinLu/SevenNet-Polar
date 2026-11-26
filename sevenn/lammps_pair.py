@@ -115,11 +115,9 @@ class PairDriver:
             )
         self.numbers = np.array([0] + [atomic_numbers[s] for s in opt['symbols']])
         self.cutoff = float(self.base.cutoff)
-        run = (
-            self.base.mps_runtime.report
-            if self.base.mps_runtime
-            else 'reference code'
-        )
+        from sevenn.mps import report
+
+        run = report(self.base.model) or 'reference code'
         self.banner = (
             f'e3gnn on the Apple GPU: {path}, cutoff {self.cutoff} A, '
             f'field {field}, elements {" ".join(opt["symbols"])}\n{run}'

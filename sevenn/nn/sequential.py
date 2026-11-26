@@ -36,6 +36,13 @@ class _ModalInputPrepare(nn.Module):
         return data
 
 
+def _moves_to_mps(fn) -> bool:
+    try:
+        return fn(torch.zeros(0)).device.type == 'mps'
+    except Exception:
+        return False
+
+
 @compile_mode('script')
 class AtomGraphSequential(nn.Sequential):
     """
@@ -95,6 +102,15 @@ class AtomGraphSequential(nn.Sequential):
         super().__init__(modules)
         if not isinstance(self._modules, OrderedDict):  # backward compat
             self._modules = OrderedDict(self._modules)
+
+    def _apply(self, fn, *args, **kwargs):
+        # Apple GPU: float32 before the move, fused kernels after it, undone when the
+        # model leaves the device (sevenn/mps)
+        if '_mps' in self.__dict__ or _moves_to_mps(fn):
+            from sevenn.mps.runtime import apply
+
+            return apply(self, fn, super()._apply, *args, **kwargs)
+        return super()._apply(fn, *args, **kwargs)
 
     def set_is_batch_data(self, flag: bool):
         # whether given data is batched or not some module have to change

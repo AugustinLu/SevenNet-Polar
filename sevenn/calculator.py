@@ -72,13 +72,12 @@ class SevenNetCalculator(Calculator):
         sevennet_config: dict | None, default=None
             Not used, but can be used to carry meta information of this calculator
         mps_opt: str | None, default=None
-            Apple GPU only (device='mps'): 'fused' runs supported modules in fused
-            Metal kernels (see sevenn/mps/), 'off' runs the reference e3nn
-            code. None means 'fused' unless the environment variable SEVENNET_MPS_OPT
-            is 'off'. Asking for 'fused' on another device is an error.
+            Deprecated (SevenNet-Polar 0.3): device='mps' runs the fused kernels,
+            and SEVENN_DISABLE_MPS=1 the reference e3nn code. 'off' still selects
+            the reference code for this calculator's model.
         mps_edge_bucket: int, default=256
-            Apple GPU with mps_opt: pad the edge list to a multiple of this,
-            so tensor shapes repeat in MD. 0 or 1 disables the padding.
+            Deprecated (SevenNet-Polar 0.3): edge padding on the Apple GPU, a
+            multiple of this; 0 or 1 disables it.
         """
         super().__init__(**kwargs)
         self.sevennet_config = None
@@ -187,14 +186,8 @@ class SevenNetCalculator(Calculator):
 
         self.model.to(self.device)
         self.model.eval()
-        self.mps_runtime = None
-        if mps_opt is not None or self.device.type == 'mps':
-            from sevenn.mps.runtime import MpsRuntime
-
-            self.mps_runtime = MpsRuntime.for_calculator(
-                self, mps_opt, mps_edge_bucket,
-                is_instance=isinstance(model, AtomGraphSequential),
-            )
+        if mps_opt is not None or mps_edge_bucket != 256:
+            _polar_03_apple_options(self.model, self.device, mps_opt, mps_edge_bucket)
         self.implemented_properties = [
             'free_energy',
             'energy',
@@ -279,10 +272,9 @@ class SevenNetCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         if atoms is None:
             raise ValueError('No atoms to evaluate')
-        graph = unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=is_ts_type)
-        if self.mps_runtime is not None:
-            graph = self.mps_runtime.prepare(graph)
-        data = AtomGraphData.from_numpy_dict(graph)
+        data = AtomGraphData.from_numpy_dict(
+            unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=is_ts_type)
+        )
         if self.modal:
             data[KEY.DATA_MODALITY] = self.modal
 
@@ -299,13 +291,36 @@ class SevenNetCalculator(Calculator):
             data = data.to_dict()
             del data['data_info']
 
-        try:
-            self.results = self.output_to_results(self.model(data))
-        finally:
-            if self.mps_runtime is not None:
-                self.mps_runtime.finish()
-        if self.mps_runtime is not None:
-            self.results['num_edges'] = self.mps_runtime.num_edges
+        self.results = self.output_to_results(self.model(data))
+
+
+def _polar_03_apple_options(model, device, mps_opt, bucket) -> None:
+    """mps_opt and mps_edge_bucket of SevenNet-Polar 0.3, kept for old scripts."""
+    warnings.warn(
+        "mps_opt and mps_edge_bucket are deprecated: device='mps' runs the fused "
+        'kernels, SEVENN_DISABLE_MPS=1 the reference e3nn code',
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    if mps_opt not in (None, 'fused', 'off'):
+        raise ValueError(f"mps_opt must be 'fused' or 'off', got {mps_opt!r}")
+    if torch.device(device).type != 'mps':
+        if mps_opt == 'fused':
+            raise ValueError(f"mps_opt='fused' needs device='mps', got {device}")
+        return
+    if not isinstance(model, AtomGraphSequential):
+        if mps_opt == 'fused':
+            raise ValueError(
+                "mps_opt='fused' is not possible: a deployed TorchScript model has no "
+                'modules to switch'
+            )
+        return
+    from sevenn import mps
+
+    if mps_opt == 'off':
+        mps.restore(model)
+    else:
+        mps.prepare(model, bucket=bucket)
 
 
 class FieldCalculator(Calculator):
