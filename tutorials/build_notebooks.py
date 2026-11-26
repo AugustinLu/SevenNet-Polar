@@ -49,8 +49,8 @@ print(len(atoms), 'atoms, cell', atoms.cell.lengths())"""),
     M("""## Energy, forces and stress with each backend
 
 `T.calculator(model, device, mps_opt)` builds a `SevenNetCalculator`. In your own scripts this is simply
-`SevenNetCalculator('7net-0', device='mps')`, which uses the fused kernels; `mps_opt='off'` keeps the
-reference e3nn code."""),
+`SevenNetCalculator('7net-0', device='mps')`, which uses the fused kernels; the environment variable
+`SEVENN_DISABLE_MPS=1` keeps the reference e3nn code."""),
     C("""results, calcs = {}, {}
 for label, device, opt in T.available_backends():
     t = time.perf_counter()

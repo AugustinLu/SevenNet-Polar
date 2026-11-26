@@ -183,7 +183,7 @@ If you use SevenNet-Polar, please cite our [preprint](https://arxiv.org/abs/2607
 }
 ```
 
-If you use the Apple GPU kernels (`device='mps'`, `--enable_mps`), please also cite the version of the code you used ([Zenodo](https://doi.org/10.5281/zenodo.24106383)):
+If you use the Apple GPU kernels (`device='mps'`), please also cite the version of the code you used ([Zenodo](https://doi.org/10.5281/zenodo.24106383)):
 
 ```bib
 @software{lu_sevennet_polar_0_3_2026,

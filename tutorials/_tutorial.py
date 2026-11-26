@@ -104,7 +104,16 @@ def calculator(model, device, mps_opt, **kw):
 
     if device == 'cpu':
         return SevenNetCalculator(model, device='cpu', **kw)
-    return SevenNetCalculator(model, device=device, mps_opt=mps_opt, **kw)
+    # the reference e3nn code on the Apple GPU is the opt-out SEVENN_DISABLE_MPS=1
+    old = os.environ.get('SEVENN_DISABLE_MPS')
+    os.environ['SEVENN_DISABLE_MPS'] = '1' if mps_opt == 'off' else ''
+    try:
+        return SevenNetCalculator(model, device=device, **kw)
+    finally:
+        if old is None:
+            del os.environ['SEVENN_DISABLE_MPS']
+        else:
+            os.environ['SEVENN_DISABLE_MPS'] = old
 
 
 def sync(device):

@@ -45,7 +45,7 @@ def _modal(args: List[str], i: int, out: dict) -> int:
 
 
 # pair_coeff keywords before the element list: name -> reader(args, i, out) returning
-# the index after its values. SevenNet-Polar adds its field keywords below.
+# the index after its values
 KEYWORDS: Dict[str, Callable[[List[str], int, dict], int]] = {'modal': _modal}
 
 

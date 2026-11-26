@@ -3,33 +3,51 @@
 ```python
 from sevenn.calculator import FieldCalculator, SevenNetCalculator
 
-base = SevenNetCalculator('checkpoint.pth', device='mps')    # fused kernels are the default on device='mps'
+base = SevenNetCalculator('checkpoint.pth', device='mps')    # fused kernels: moving the model to 'mps' switches them on
 calc = FieldCalculator(base, enforce_asr=True)
 calc.set_efield([0.0, 0.0, 0.05])                             # V/Angstrom, Direct models
 atoms.calc = calc
-print(base.mps_runtime.mode, base.mps_runtime.report)         # what runs how
+
+from sevenn.mps import report
+print(report(base.model))                                     # what runs how
 ```
 
 ## The switch
 
+The switch is the device: moving a model to `mps` (`model.to('mps')`, which the calculator, `Trainer` and `sevenn
+inference` do) converts float64 parameters to float32, switches the e3nn layers to fused Metal kernels and pads edge
+lists; moving it away (`model.to('cpu')`) undoes it. The model object is changed in place.
+
 | setting | effect |
 |---|---|
-| `SevenNetCalculator(..., device='mps')` or `mps_opt='fused'` | fused Metal kernels, edge padding (default on the Apple GPU) |
-| `mps_opt='off'`, or environment `SEVENNET_MPS_OPT=off` | the reference e3nn code, unchanged, on the GPU |
-| `mps_edge_bucket=0` | no edge padding (slower MD: each new edge count costs about 20 ms at 96 atoms) |
-| `device='auto'` or `'cpu'` or `'cuda'` | nothing changes; the Apple code is not imported |
-| `sevenn inference --enable_mps ...` (or `--device mps`) | evaluates a dataset with the fused kernels; batches padded to 256 edges; `SEVENNET_MPS_OPT=off` for e3nn |
-| `sevenn train input.yaml --enable_mps` (or `device: mps` in the YAML), `Trainer(..., device='mps')` | training on the fused kernels; `SEVENNET_MPS_OPT=off` for e3nn |
+| `device='mps'` | fused Metal kernels, edge padding |
+| `device='mps'` with the environment variable `SEVENN_DISABLE_MPS=1` | the reference e3nn code, unchanged, on the GPU (float32) |
+| `device='auto'` | CUDA if available, else the Apple GPU (the CPU with `SEVENN_DISABLE_MPS=1`) |
+| `device='cpu'` or `'cuda'` | nothing changes; the Apple code is not imported |
+| `sevenn inference --device mps ...` | evaluates a dataset with the fused kernels; batches padded to 256 edges |
+| `device: mps` under `train` in the YAML, `Trainer(..., device='mps')` | training on the fused kernels |
 
-Explicit `mps_opt='fused'` on another device, or on a deployed TorchScript model, is an error. With the default setting a TorchScript model, or
-a PyTorch without `torch.mps.compile_shader` (2.6), runs the reference code on the GPU with a warning. Before PyTorch 2.6 the GPU cannot
-run SevenNet at all (no `scatter_reduce` on MPS), so `device='mps'` stops with an error. A module the kernels do not cover (a uvu path whose input and output
-multiplicities differ, a gate activation other than silu and tanh, a non-one-hot self-connection operand) keeps the e3nn code on the GPU, with a
-warning; `base.mps_runtime.report` counts them. Nothing moves to the CPU. Leave `PYTORCH_ENABLE_MPS_FALLBACK` unset: SevenNet does not need
-it, and it is what would let PyTorch move operations to the CPU silently (the calculator warns if it is set).
+From 0.3 (deprecated, still accepted): `mps_opt='off'` and `mps_edge_bucket` of `SevenNetCalculator`,
+`SEVENNET_MPS_OPT=off`, `--enable_mps` of `sevenn train` and `sevenn inference`.
 
-Call `disable(model)` before saving a whole model object or moving it off the Apple GPU: the kernel tables are not buffers (`state_dict` is not affected). All tests pass on PyTorch 2.10 to 2.15; on 2.7 to 2.9 checkpoints run but a model object cannot be deep-copied, and below 2.7 the reference code runs. Checkpoints load unchanged. Derivatives with respect to positions, strain and field are complete. Parameter gradients in eval mode are not: the linear and self-connection layers treat their weights as constants there and return none, with no error (the radial networks and convolutions do return them); use train mode or `mps_opt='off'`. Weights written through `param.data` are not noticed by the eval tables: load them with `load_state_dict` or assign new parameters. Second derivatives: the convolution kernels have derivatives to any order, including mixed ones through non-contiguous inputs since 0.3.3; the linear and gate kernels have first derivatives
-only, so `create_graph=True` in eval mode raises an error from those layers. The kernels index with 32-bit integers: a convolution needs edges × weights per edge below 2^31 (SevenNet-PM-M: about 493,000 edges, some 6,000 atoms of ZrO2), whatever the memory; larger graphs stop with an error that names `mps_opt='off'`.
+A model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP cannot move to the Apple GPU (error). A PyTorch
+without `torch.mps.compile_shader` (2.6), or weights other than float32, run the reference code on the GPU with a
+warning. Before PyTorch 2.6 the GPU cannot run SevenNet at all (no `scatter_reduce` on MPS), so the move stops with an
+error. A module the kernels do not cover (a uvu path whose input and output multiplicities differ, a gate activation
+other than silu and tanh, a non-one-hot self-connection operand) keeps the e3nn code on the GPU, with a warning;
+`report(model)` counts them. Nothing moves to the CPU. Leave `PYTORCH_ENABLE_MPS_FALLBACK` unset: SevenNet does not
+need it, and it is what would let PyTorch move operations to the CPU silently.
+
+The kernel tables are not buffers, so `state_dict` and checkpoints are not affected. Checkpoints load unchanged.
+Derivatives with respect to positions, strain and field are complete. Parameter gradients in eval mode are not: the
+linear and self-connection layers treat their weights as constants there and return none, with no error (the radial
+networks and convolutions do return them); use train mode or the CPU. Weights written through `param.data` are not
+noticed by the eval tables: load them with `load_state_dict`, or move the model to the CPU and back. Second
+derivatives: the convolution kernels have derivatives to any order, including mixed ones through non-contiguous
+inputs since 0.3.3; the linear and gate kernels have first derivatives only, so `create_graph=True` in eval mode
+raises an error from those layers. The kernels index with 32-bit integers: a convolution needs edges × weights per
+edge below 2^31 (SevenNet-PM-M: about 493,000 edges, some 6,000 atoms of ZrO2), whatever the memory; larger graphs
+stop with an error that names `SEVENN_DISABLE_MPS=1`.
 
 Training: in `model.train()` the convolutions keep running the fused kernels. The product is linear in each of its inputs, so
 each derivative of the backward pass is one of the same three kernels with an input swapped; written as autograd functions that
@@ -37,7 +55,7 @@ call each other, they give derivatives to any order and keep only their inputs, 
 self-connection layers rebuild their matrix from the live weights at each call and run one matrix product, and the gate is a
 few elementwise operations, so autograd differentiates them to any order too. Their tables are built at the first call in
 train mode (16 s and 4 GB in all for 7net-omni at 96 atoms). `Trainer` on `device='mps'` switches this on;
-`SEVENNET_MPS_OPT=off` keeps e3nn.
+`SEVENN_DISABLE_MPS=1` keeps e3nn.
 
 | model, batch | e3nn: step, memory kept for backward | fused: step, memory kept |
 |---|---|---|
@@ -71,7 +89,7 @@ pair_style  e3gnn
 pair_coeff  * * checkpoint.pth efield 0 0 0.05 Zr O
 ```
 
-`--enable_flash`, `--enable_oeq` and `--d3` need CUDA and cannot be combined with `--enable_mps`. Keep the Python environment that ran `patch_lammps`: LAMMPS runs SevenNet inside it, and it needs no libtorch link. `SEVENN_PYTHON` and `SEVENN_ROOT` override the environment and the SevenNet folder recorded in the build; with the plugin, `SEVENN_PYTHON` must use the same Python version as the build.
+On a Mac with an Apple GPU, `sevenn patch_lammps` installs this pair style (`SEVENN_DISABLE_MPS=1` keeps the NVIDIA one; `--enable_flash`, `--enable_oeq` and `--d3` need CUDA). Keep the Python environment that ran `patch_lammps`: LAMMPS runs SevenNet inside it, and it needs no libtorch link. `SEVENN_PYTHON` and `SEVENN_ROOT` override the environment and the SevenNet folder recorded in the build; with the plugin, `SEVENN_PYTHON` must use the same Python version as the build.
 
 **Option 1, build LAMMPS (same steps as FlashTP, `lammps_torch` page of the docs):**
 
@@ -80,7 +98,7 @@ git clone https://github.com/lammps/lammps.git lammps_sevenn --branch stable_22J
 ```
 
 ```bash
-sevenn patch_lammps ./lammps_sevenn --enable_mps
+sevenn patch_lammps ./lammps_sevenn
 ```
 
 ```bash
@@ -94,18 +112,19 @@ cd lammps_sevenn && mkdir build && cd build && cmake ../cmake -DBUILD_MPI=no -DB
 **Option 2, no build, with `pip install lammps mpich`:** the same pair style as a plugin.
 
 ```bash
-sh sevenn/pair_e3gnn_mps/build_plugin.sh python
+SRC=$(python -c "import sevenn.mps.lammps.patch as p; print(p.SRC)")
+bash $SRC/build_plugin.sh python
 ```
 
 ```bash
-export LAMMPS_PLUGIN_PATH=$PWD/sevenn/pair_e3gnn_mps
+export LAMMPS_PLUGIN_PATH=$SRC
 ```
 
 Then `lmp -in` as above. `06_lammps_serial.py` (`fix external`, no compiler at all) stays for scripts that drive LAMMPS from Python.
 
 Per-atom energies work; per-atom stress does not, as on NVIDIA. The model builds its own edges, so LAMMPS builds no pair neighbor list.
 
-It needs `units metal` and one MPI rank, and stops with an error otherwise. So does `neigh_modify exclude`, which it cannot honour: it sees all atoms. `pair_style hybrid/overlay` works, with all atom types mapped to elements: `NULL` is not supported, and there is no neighbor list request, as the model builds its own edges (computes such as `rdf` request their own).
+It needs `units metal` and one MPI rank, and stops with an error otherwise. So do `neigh_modify exclude` and `include`, which it cannot honour (it sees all atoms), and `pair_style hybrid` or `hybrid/overlay`, since it computes every atom. There is no neighbor list request, as the model builds its own edges (computes such as `rdf` request their own).
 
 **With a field,** the reported energy is the zero-field U, as on NVIDIA. Direct models add Z*ᵀE to the forces, so the forces are not the gradient of the reported energy. Energy-based minimization and energy-conservation checks can mislead under a field, and a thermostatted run is field-driven dynamics, not an equilibrium finite-field ensemble. `enforce_asr yes` is for neutral cells.
 

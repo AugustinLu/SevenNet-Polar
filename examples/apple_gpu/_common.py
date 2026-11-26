@@ -34,7 +34,7 @@ def parser(doc):
         '--mps-opt',
         default='fused',
         choices=['fused', 'off'],
-        help="'off' runs the reference e3nn code",
+        help="'off' runs the reference e3nn code (as SEVENN_DISABLE_MPS=1)",
     )
     ap.add_argument(
         '--efield',
@@ -56,14 +56,14 @@ def structure(repeat, rattle=0.05):
 
 
 def calculators(args):
-    base = SevenNetCalculator(args.ckpt, device='mps', mps_opt=args.mps_opt)
+    if args.mps_opt == 'off':
+        os.environ['SEVENN_DISABLE_MPS'] = '1'
+    base = SevenNetCalculator(args.ckpt, device='mps')
     calc = FieldCalculator(base, enforce_asr=True)
     calc.set_efield(args.efield)
-    runtime = base.mps_runtime
-    print(
-        f'execution: {runtime.mode}, edge bucket {runtime.bucket}, modules '
-        f'{runtime.report}'
-    )
+    from sevenn.mps import report
+
+    print(f'modules: {report(base.model) or "reference e3nn code"}')
     return base, calc
 
 

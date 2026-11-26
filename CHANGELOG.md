@@ -1,11 +1,41 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [SevenNet-Polar 0.3.3] - 2026-11-15
-Bug fix in the higher derivatives of the Apple GPU convolution, and clearer documentation of
-field MD and of the Apple GPU limits.
+## [SevenNet-Polar 0.3.3] - unreleased
+The Apple GPU code reorganized as upstream SevenNet asked for it (one subpackage, one entry point,
+no flags), a bug fix in the higher derivatives of the Apple GPU convolution, and clearer
+documentation of field MD and of the Apple GPU limits. The optimizations planned for 0.3.3 move to
+0.3.4.
+
+### Changed
+- **The Apple GPU switch is the device.** Moving a model to `mps` (`model.to('mps')`, which
+  `SevenNetCalculator`, `Trainer` and `sevenn inference` do) converts float64 parameters to float32,
+  switches the e3nn layers to the fused kernels and pads edge lists; moving it away undoes it. All
+  Apple GPU code is in `sevenn/mps/` (kernels, modules, padding, runtime, and the LAMMPS pair style
+  in `sevenn/mps/lammps/`); the calculator, `Trainer` and `sevenn inference` contain none. A model
+  instance given to the calculator on `device='mps'` is now changed in place (before, a copy was).
+- **`device='auto'` selects the Apple GPU** on a Mac without CUDA (before: the CPU).
+- **Opt-out: `SEVENN_DISABLE_MPS=1`** (also `true`, `yes`) keeps the reference e3nn code on the
+  Apple GPU, and makes `device='auto'` select the CPU. Deprecated but still accepted:
+  `SEVENNET_MPS_OPT=off`, `mps_opt` and `mps_edge_bucket` of `SevenNetCalculator`, `--enable_mps`
+  of `sevenn train` and `sevenn inference`, and the module names `sevenn.lammps_pair` (which
+  LAMMPS binaries built with 0.3 import) and `sevenn.lammps_external`.
+- **`sevenn patch_lammps` detects the Apple GPU**: on a Mac with an Apple GPU and no CUDA it
+  installs the Apple GPU pair style (`--enable_mps` no longer needed). The plugin sources moved
+  to `sevenn/mps/lammps/src/`.
+- **Safeguards from the upstream pull request (MDIL-SNU/SevenNet#340):** 32-bit index checks in
+  the linear and gate kernels; no kernel launch on an empty graph; a convolution whose generated
+  shader does not compile keeps the e3nn code; no padding under autocast; the LAMMPS pair style
+  refuses `neigh_modify include` and `pair_style hybrid`, returns at once with no local atoms, and
+  checks every Python object it uses; `build_plugin.sh` says when libpython is missing; the
+  `fix external` bridge checks the shapes of the calculator's results. A model built with
+  cuEquivariance, FlashTP, OpenEquivariance or LunaTP is refused on the Apple GPU with an error.
 
 ### Fixed
+- `sevenn get_model` wrote `chemical_symbols_to_index` in the key order of the type map, but the
+  LAMMPS pair styles read a species' index from its position in that list: a checkpoint whose type
+  map keys were out of index order was deployed with the wrong species and no error. Models
+  deployed from such checkpoints must be deployed again (from upstream SevenNet #341).
 - **Mixed higher derivatives through a non-contiguous convolution input on the Apple GPU.** The
   fused convolution saved the contiguous copies it made of its inputs. A copy made from a
   non-contiguous input (a transposed view, for example) is not connected to the caller's graph, so
@@ -14,11 +44,12 @@ field MD and of the Apple GPU limits.
   SevenNet-Polar models pass contiguous inputs (checked for 7net-0 and SevenNet-PM-S), so energies,
   forces, stress, Born charges and force-loss training were not affected. A new test takes mixed
   derivatives to third order through transposed views and compares them with e3nn.
+- The Python-version test workflow (from upstream SevenNet #339).
 
-### Changed
-- **Training sees the real edges only.** `Trainer` removes the pad edges from the model output
-  before losses and metrics read it, as `sevenn inference` already did. No current loss or metric
-  reads edge tensors, so results are unchanged.
+### Changed (documentation and outputs)
+- **Outputs carry the real edges only**, in training, `sevenn inference` and the calculator: the
+  pad edges are removed from every edge-shaped output. No current loss or metric reads edge
+  tensors, so results are unchanged.
 - **Field MD wording** (README, `FieldCalculator`): with a Direct model the field forces Z\*ᵀE are
   not the gradient of an energy, so a thermostat keeps a run stable but does not make it sample an
   equilibrium finite-field ensemble, and NPT sees only the zero-field stress. `enforce_asr` is for

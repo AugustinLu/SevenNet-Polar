@@ -31,7 +31,9 @@ def watch():
         peak[0] = max(peak[0], r + d); peak[1] = max(peak[1], d)
         time.sleep(0.01)
 threading.Thread(target=watch, daemon=True).start()
-calc = SevenNetCalculator({ckpt!r}, device='mps', mps_opt={mode!r})
+if {mode!r} == 'off':
+    os.environ['SEVENN_DISABLE_MPS'] = '1'
+calc = SevenNetCalculator({ckpt!r}, device='mps')
 at = structure({k})
 at.calc = calc
 for i in range(5):
