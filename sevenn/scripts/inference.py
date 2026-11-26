@@ -318,12 +318,12 @@ def inference(
     pad = None
     if on_mps:
         # Apple GPU: fused Metal kernels, as in the calculator
-        from sevenn.nn.mps_opt import check_torch, enable_or_warn
+        from sevenn.mps.modules import check_torch, enable_or_warn
 
         check_torch('inference')
         if os.environ.get('SEVENNET_MPS_OPT') != 'off':
             if enable_or_warn(model, 'inference') is not None:
-                from sevenn.nn.mps_opt import BatchPadder
+                from sevenn.mps.padding import BatchPadder
 
                 pad = BatchPadder(model)
 

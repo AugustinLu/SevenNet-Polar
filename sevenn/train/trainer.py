@@ -73,13 +73,13 @@ class Trainer:
         self._pad = None
         if self.device.type == 'mps':
             # Apple GPU: fused kernels in training and validation
-            from sevenn.nn.mps_opt import check_torch, enable_or_warn
+            from sevenn.mps.modules import check_torch, enable_or_warn
 
             check_torch('training')
             if os.environ.get('SEVENNET_MPS_OPT') != 'off':
                 if enable_or_warn(self.model, 'training') is not None:
                     # few batch shapes, or the MPS graph cache grows without bound
-                    from sevenn.nn.mps_opt import BatchPadder
+                    from sevenn.mps.padding import BatchPadder
 
                     self._pad = BatchPadder(self.model)
 

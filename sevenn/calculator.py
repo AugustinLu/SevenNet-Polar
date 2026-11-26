@@ -73,7 +73,7 @@ class SevenNetCalculator(Calculator):
             Not used, but can be used to carry meta information of this calculator
         mps_opt: str | None, default=None
             Apple GPU only (device='mps'): 'fused' runs supported modules in fused
-            Metal kernels (see sevenn/nn/mps_opt.py), 'off' runs the reference e3nn
+            Metal kernels (see sevenn/mps/), 'off' runs the reference e3nn
             code. None means 'fused' unless the environment variable SEVENNET_MPS_OPT
             is 'off'. Asking for 'fused' on another device is an error.
         mps_edge_bucket: int, default=256
@@ -189,7 +189,7 @@ class SevenNetCalculator(Calculator):
         self.model.eval()
         self.mps_runtime = None
         if mps_opt is not None or self.device.type == 'mps':
-            from sevenn.nn.mps_opt import MpsRuntime
+            from sevenn.mps.runtime import MpsRuntime
 
             self.mps_runtime = MpsRuntime.for_calculator(
                 self, mps_opt, mps_edge_bucket,

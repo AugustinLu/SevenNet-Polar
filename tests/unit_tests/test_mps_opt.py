@@ -1,4 +1,4 @@
-"""Apple GPU execution (sevenn/nn/mps_opt.py, mps_fused.py). MPS tests are skipped
+"""Apple GPU execution (sevenn/mps/). MPS tests are skipped
 where no Apple GPU exists: a skip is not a pass."""
 
 import os
@@ -19,8 +19,11 @@ import sevenn.train.dataload as dl
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.calculator import SevenNetCalculator
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn.nn.mps_fused import generate_msl, probe_cg
-from sevenn.nn.mps_opt import mps_torch_supported, pad_edges, padding_is_safe
+from sevenn.mps import padding as mps_padding
+from sevenn.mps import runtime as mps_runtime
+from sevenn.mps.kernels import generate_msl, probe_cg
+from sevenn.mps.modules import mps_torch_supported
+from sevenn.mps.padding import pad_edges, padding_is_safe
 from sevenn.util import chemical_species_preprocess
 
 needs_mps = pytest.mark.skipif(
@@ -187,7 +190,7 @@ def test_cuda_and_cpu_paths_do_not_import_the_apple_code():
     code = (
         'import sys, numpy, sevenn.calculator, sevenn.model_build, '
         'sevenn.checkpoint, sevenn.scripts.deploy\n'
-        "assert not [m for m in sys.modules if m.startswith('sevenn.nn.mps')]\n"
+        "assert not [m for m in sys.modules if m.startswith('sevenn.mps')]\n"
     )
     subprocess.run([sys.executable, '-c', code], check=True)
 
@@ -217,7 +220,7 @@ def test_fused_on_cpu_device_is_an_error():
     ],
 )
 def test_fused_equals_e3nn(method, field):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model(method)
     graph = _graph()
@@ -231,7 +234,7 @@ def test_fused_equals_e3nn(method, field):
 
 @needs_mps
 def test_state_dict_unchanged_and_strict_round_trip():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     before = {k: v.clone() for k, v in model.state_dict().items()}
@@ -245,7 +248,7 @@ def test_state_dict_unchanged_and_strict_round_trip():
 
 @needs_mps
 def test_load_state_dict_after_enable_refreshes_the_tables():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     graph = _graph()
     other = _build(_config(), seed=7).to('mps')
@@ -260,7 +263,7 @@ def test_load_state_dict_after_enable_refreshes_the_tables():
 
 @needs_mps
 def test_tensor_product_kernels_equal_e3nn_on_random_graph_with_unsorted_edges():
-    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedTP, FusedUvu
 
     tp = _tp().to('mps')
     K = FusedTP(tp)
@@ -305,7 +308,7 @@ def _tp_unequal():
 @needs_mps
 @pytest.mark.parametrize('tp_fn', [_tp, _tp_unequal])
 def test_kernels_equal_e3nn_to_third_order(tp_fn):
-    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedTP, FusedUvu
 
     torch.manual_seed(0)
     tp = tp_fn().to('mps')
@@ -343,7 +346,7 @@ def test_kernels_mixed_derivatives_through_noncontiguous_inputs(tp_fn):
     """x, y and w as transposed views of leaves: mixed derivatives to third order
     reach the leaves and equal e3nn's (a contiguous copy saved inside the forward
     would cut the graph to the caller's tensor)."""
-    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedTP, FusedUvu
 
     torch.manual_seed(5)
     tp = tp_fn().to('mps')
@@ -377,7 +380,7 @@ def test_kernels_mixed_derivatives_through_noncontiguous_inputs(tp_fn):
 
 @needs_mps
 def test_kernels_with_unequal_multiplicities_equal_e3nn():
-    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedTP, FusedUvu
 
     tp = _tp_unequal().to('mps')
     K = FusedTP(tp)
@@ -417,7 +420,7 @@ def test_kernels_with_unequal_multiplicities_equal_e3nn():
 
 @needs_mps
 def test_model_with_unequal_channels_runs_fully_fused():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model(
         channel=[8, 8, 8, 8],
@@ -433,7 +436,7 @@ def test_model_with_unequal_channels_runs_fully_fused():
 
 @needs_mps
 def test_kernels_respect_views_with_storage_offset():
-    from sevenn.nn.mps_fused import CsrApply, CsrMap
+    from sevenn.mps.kernels import CsrApply, CsrMap
 
     x = torch.arange(12.0, device='mps').reshape(4, 3)
     M = CsrMap(
@@ -453,7 +456,7 @@ def test_kernels_respect_views_with_storage_offset():
 
 @needs_mps
 def test_large_linear_layers_stay_on_e3nn(monkeypatch):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     graph = _graph()
@@ -467,7 +470,7 @@ def test_large_linear_layers_stay_on_e3nn(monkeypatch):
 
 @needs_mps
 def test_fused_linear_with_bias_and_gradients():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     lin = Linear(Irreps('3x0e+2x1o'), Irreps('2x0e+1x1o'), biases=True).to('mps')
     x = torch.randn(5, lin.irreps_in.dim, device='mps', requires_grad=True)
@@ -484,7 +487,7 @@ def test_fused_linear_with_bias_and_gradients():
 
 @needs_mps
 def test_fused_gate_tables_and_gradients():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     gate = Gate(
         '3x0e+2x0o',
@@ -508,7 +511,7 @@ def test_fused_gate_tables_and_gradients():
 
 @needs_mps
 def test_unsupported_gate_activation_keeps_e3nn_on_the_gpu():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model(act_scalar={'e': 'ssp', 'o': 'tanh'})
     graph = _graph()
@@ -525,7 +528,7 @@ def test_unsupported_gate_activation_keeps_e3nn_on_the_gpu():
 @pytest.mark.parametrize('method', METHODS)
 @pytest.mark.parametrize('bucket', [37, 67, 1024])
 def test_pad_edges_are_silent_in_fused_kernels(method, bucket):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model(method)
     mps_opt.enable(model)
@@ -630,7 +633,7 @@ def test_isolated_atoms_without_edges(bucket):
 def test_train_mode_runs_the_kernels_and_supports_force_training(
     method, monkeypatch
 ):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     ref = _build(_config(method=method)).to('mps')
     ref.set_is_batch_data(False)
@@ -670,7 +673,7 @@ def test_train_mode_runs_the_kernels_and_supports_force_training(
 
 @needs_mps
 def test_train_mode_has_second_derivatives_also_with_unequal_channels():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     graph = _graph()
     for kw in (
@@ -711,7 +714,7 @@ def test_train_mode_node_layers_avoid_e3nn_and_equal_it(all_types, monkeypatch):
     from e3nn.nn import Gate as E3Gate
     from e3nn.o3 import FullyConnectedTensorProduct
 
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     graph = _graph()
     ref = _build(_config()).to('mps')
@@ -761,7 +764,7 @@ def test_train_mode_node_layers_avoid_e3nn_and_equal_it(all_types, monkeypatch):
 
 
 def test_weight_map_refuses_a_map_that_is_not_one_weight_per_entry():
-    from sevenn.nn.mps_opt import _weight_map
+    from sevenn.mps.modules import _weight_map
 
     w = torch.nn.Parameter(torch.ones(3, dtype=torch.float64))
     with pytest.raises(NotImplementedError, match='one weight times a constant'):
@@ -770,7 +773,7 @@ def test_weight_map_refuses_a_map_that_is_not_one_weight_per_entry():
 
 @needs_mps
 def test_trainer_switches_on_only_for_the_apple_gpu(monkeypatch):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
     from sevenn.train.trainer import Trainer
 
     for device, env, expect in (
@@ -791,7 +794,7 @@ def test_trainer_switches_on_only_for_the_apple_gpu(monkeypatch):
 
 @needs_mps
 def test_second_derivatives_raise_in_the_linear_kernel():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     # the convolution kernels have them (see the third-order test); linear and gate
     # kernels do not
@@ -808,7 +811,7 @@ def test_second_derivatives_raise_in_the_linear_kernel():
 def test_batched_data_equals_single_graphs():
     from torch_geometric.loader.dataloader import Collater
 
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     mps_opt.enable(model)
@@ -830,7 +833,7 @@ def test_batched_data_equals_single_graphs():
 
 @needs_mps
 def test_stale_padding_announcement_does_not_cut_edges():
-    from sevenn.nn.mps_fused import EdgePlan
+    from sevenn.mps.kernels import EdgePlan
 
     idx = torch.tensor([[0, 1, 1, 2], [1, 0, 2, 1]], device='mps')
     p = EdgePlan()
@@ -852,7 +855,7 @@ def test_instance_under_default_file_type_is_not_switched():
 
 @needs_mps
 def test_fused_instance_with_off_runs_e3nn_and_leaves_the_input_fused():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     mps_opt.enable(model)
@@ -869,7 +872,7 @@ def test_fused_instance_with_off_runs_e3nn_and_leaves_the_input_fused():
 def test_deepcopy_after_load_state_dict_uses_the_new_weights():
     import copy
 
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     graph = _graph()
     other = _build(_config(), seed=7).to('mps')
@@ -884,7 +887,7 @@ def test_deepcopy_after_load_state_dict_uses_the_new_weights():
 
 @needs_mps
 def test_enable_leaves_the_global_random_generator_alone():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     torch.manual_seed(123)
@@ -896,7 +899,7 @@ def test_enable_leaves_the_global_random_generator_alone():
 
 @needs_mps
 def test_too_large_graph_is_refused():
-    from sevenn.nn.mps_fused import EdgePlan, FusedTP, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedTP, FusedUvu
 
     K = FusedTP(_tp().to('mps'))
     plan = EdgePlan()
@@ -908,7 +911,7 @@ def test_too_large_graph_is_refused():
 
 @needs_mps
 def test_edge_plan_notices_new_tensors_and_in_place_changes():
-    from sevenn.nn.mps_fused import EdgePlan
+    from sevenn.mps.kernels import EdgePlan
 
     idx = torch.tensor([[0, 1, 1], [1, 0, 2]], device='mps')
     p = EdgePlan()
@@ -1138,7 +1141,7 @@ def test_weights_loaded_on_the_cpu_are_used_after_moving_back():
 
 @needs_mps
 def test_enable_refuses_other_float_types():
-    from sevenn.nn.mps_opt import enable
+    from sevenn.mps.modules import enable
 
     model = _build(_config()).to('mps').to(torch.float16)
     with pytest.raises(ValueError, match='float32'):
@@ -1167,7 +1170,8 @@ def test_failed_call_leaves_no_padding_note():
 
 @needs_mps
 def test_no_padding_with_a_convolution_left_on_e3nn():
-    from sevenn.nn.mps_opt import MpsRuntime, enable
+    from sevenn.mps.modules import enable
+    from sevenn.mps.runtime import MpsRuntime
 
     calc = SevenNetCalculator(
         _build(_config()), file_type='model_instance', device='mps', mps_opt='off'
@@ -1179,7 +1183,7 @@ def test_no_padding_with_a_convolution_left_on_e3nn():
         report['conv_e3nn'] = 1
         return report
 
-    import sevenn.nn.mps_opt as opt
+    import sevenn.mps.runtime as opt
 
     opt.enable = partly
     try:
@@ -1351,7 +1355,7 @@ def _fused_convolution():
 
 @needs_mps
 def test_kernels_refuse_other_types_and_shapes():
-    from sevenn.nn.mps_fused import EdgePlan, FusedUvu
+    from sevenn.mps.kernels import EdgePlan, FusedUvu
 
     _, K, idx, x, y, w = _fused_convolution()
     plan = EdgePlan().get(idx, 4)
@@ -1392,7 +1396,7 @@ def test_float16_edge_input_takes_the_reference_path():
 
 
 def test_edge_plan_refuses_indices_out_of_range():
-    from sevenn.nn.mps_fused import EdgePlan
+    from sevenn.mps.kernels import EdgePlan
 
     for bad in ([[0, 4], [1, 0]], [[0, -1], [1, 0]], [[0, 1], [5, 0]]):
         with pytest.raises(ValueError, match='out of range'):
@@ -1403,7 +1407,7 @@ def test_edge_plan_refuses_indices_out_of_range():
 def test_module_without_tables_stays_as_it_was():
     from e3nn.o3 import FullyConnectedTensorProduct
 
-    from sevenn.nn.mps_opt import FusedSelfConnection, _fuse
+    from sevenn.mps.modules import FusedSelfConnection, _fuse
 
     tp = FullyConnectedTensorProduct('4x0e', '2x0e', '4x1o')  # no paths
     with pytest.raises(NotImplementedError):
@@ -1413,7 +1417,7 @@ def test_module_without_tables_stays_as_it_was():
 
 @needs_mps
 def test_output_irrep_with_more_channels_is_refused():
-    from sevenn.nn.mps_fused import FusedTP
+    from sevenn.mps.kernels import FusedTP
 
     tp = TensorProduct(
         '2x0e',
@@ -1522,7 +1526,7 @@ def test_patch_lammps_reports_failure():
 
 @needs_mps
 def test_enable_twice_is_the_same_as_once():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _model()
     graph = _graph()
@@ -1539,7 +1543,7 @@ def test_enable_twice_is_the_same_as_once():
 
 @needs_mps
 def test_declined_self_connection_is_left_as_it_was():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
     from sevenn.nn.self_connection import SelfConnectionIntro
 
     class Custom(torch.nn.Module):
@@ -1580,7 +1584,7 @@ def test_float64_shift_and_scale_go_to_float32_on_mps():
 def test_conversions_drop_the_derived_tables():
     import io
 
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     graph = _graph()
     # a float16 round trip rounds the weights in place, keeping identity and version
@@ -1606,7 +1610,7 @@ def test_conversions_drop_the_derived_tables():
 
 @needs_mps
 def test_autocast_takes_the_reference_path_in_node_layers():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     species = ('H', 'Li', 'C', 'N', 'O', 'F', 'Na', 'Mg', 'Al', 'Cl')
     model = _build(_config(species=species)).to('mps').train()
@@ -1625,7 +1629,7 @@ def test_autocast_takes_the_reference_path_in_node_layers():
 @needs_mps
 @pytest.mark.parametrize('many_types', [False, True])
 def test_eval_after_training_uses_the_new_weights(many_types):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     species = (
         ('H', 'Li', 'C', 'N', 'O', 'F', 'Na', 'Mg', 'Al', 'Cl')
@@ -1661,14 +1665,14 @@ def test_eval_after_training_uses_the_new_weights(many_types):
 
 @needs_mps
 def test_trainer_keeps_e3nn_without_compile_shader(monkeypatch):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
     from sevenn.train.trainer import Trainer
 
     monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
     monkeypatch.delattr(torch.mps, 'compile_shader')
     with pytest.warns(UserWarning, match='compile_shader'):
         tr = Trainer(_build(_config()), [], torch.optim.Adam, device='mps')
-    assert not any(isinstance(m, mps_opt._FUSED) for m in tr.model.modules())
+    assert not any(isinstance(m, mps_runtime._FUSED) for m in tr.model.modules())
 
 
 @pytest.mark.skipif(
@@ -1676,7 +1680,7 @@ def test_trainer_keeps_e3nn_without_compile_shader(monkeypatch):
 )
 def test_old_pytorch_is_refused_with_a_clear_error(monkeypatch):
     # PyTorch before 2.6 has no scatter_reduce on MPS: refused up front
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
     from sevenn.train.trainer import Trainer
 
     monkeypatch.setattr(mps_opt, '_MPS_TORCH_OK', False)
@@ -1692,7 +1696,7 @@ def test_old_pytorch_is_refused_with_a_clear_error(monkeypatch):
 
 @needs_mps
 def test_type_index_must_be_int32():
-    from sevenn.nn.mps_fused import CsrApply, CsrMap
+    from sevenn.mps.kernels import CsrApply, CsrMap
 
     eye = (np.arange(2), np.arange(2), np.ones(2))
     M = CsrMap([eye, eye], np.zeros(2), 2, 2, torch.device('mps'))
@@ -1759,7 +1763,7 @@ def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
     from unittest import mock
 
     from sevenn.main.sevenn_inference import main as inference_main
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     data = Path(__file__).parents[1] / 'data'
     if opt == 'off':
@@ -1816,7 +1820,7 @@ def test_sevenn_train_with_enable_mps(tmp_path, monkeypatch):
 
     from sevenn.logger import Logger
     from sevenn.main.sevenn import main as sevenn_main
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     monkeypatch.delenv('SEVENNET_MPS_OPT', raising=False)
     reports = []
@@ -1879,14 +1883,14 @@ def _step(model, batch, pad=None):
 @needs_mps
 @pytest.mark.parametrize('method', METHODS)
 def test_padded_batch_gives_the_same_training_step(method):
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _build(_config(method=method)).to('mps')
     rep = mps_opt.enable(model)
     assert rep['conv_e3nn'] == 0
     model.set_is_batch_data(True)
     model.train()
-    pad = mps_opt.BatchPadder(model, bucket=64)
+    pad = mps_padding.BatchPadder(model, bucket=64)
     assert pad.bucket == 64
     batch = _batch()
     n_real = int(batch[KEY.EDGE_IDX].shape[1])
@@ -1937,13 +1941,13 @@ def test_trainer_pads_every_batch(monkeypatch):
 
 @needs_mps
 def test_unpad_restores_the_edges_of_an_output():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _build(_config()).to('mps')
     mps_opt.enable(model)
     model.set_is_batch_data(True)
     model.eval()
-    pad = mps_opt.BatchPadder(model, bucket=64)
+    pad = mps_padding.BatchPadder(model, bucket=64)
     batch = _batch().to('mps')
     n_real = int(batch[KEY.EDGE_IDX].shape[1])
     n_atoms = int(batch[KEY.POS].shape[0])
@@ -1957,7 +1961,7 @@ def test_unpad_restores_the_edges_of_an_output():
 
 @needs_mps
 def test_padder_is_off_when_a_convolution_stays_on_e3nn():
-    from sevenn.nn import mps_opt
+    from sevenn.mps import modules as mps_opt
 
     model = _build(_config()).to('mps')
     mps_opt.enable(model)
@@ -1966,4 +1970,4 @@ def test_padder_is_off_when_a_convolution_stays_on_e3nn():
     )
     conv.__class__ = mps_opt.IrrepsConvolution
     with pytest.warns(UserWarning, match='edge padding of batches disabled'):
-        assert mps_opt.BatchPadder(model).bucket == 0
+        assert mps_padding.BatchPadder(model).bucket == 0
