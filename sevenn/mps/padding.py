@@ -7,8 +7,8 @@ Pad edges go from atom 0 to atom 0 with vector (cutoff, 0, 0), after the real ed
 The cutoff function vanishes there, so their radial weights are exactly zero
 (padding_is_safe checks this on the actual model), and the fused kernels do not
 visit them at all (the edge plan is told how many edges are real). Energy, forces,
-stress, Born charges and every gradient are those of the real edges; unpad() drops
-the pad edges from the outputs.
+stress, every other output and every gradient are those of the real edges; unpad()
+drops the pad edges from the outputs.
 """
 
 import warnings
