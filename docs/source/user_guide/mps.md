@@ -71,7 +71,20 @@ The pair style refuses what it cannot honour: several ranks, `neigh_modify inclu
 
 ## Performance
 
-(to be filled from the candidate benchmark)
+ZrO2, energy, forces and stress per ASE call (ms): the median of 10 calls after 3 warm-up calls,
+averaged over two runs on the GPU (one on the CPU); MacBook Pro M5 Pro (48 GB), PyTorch 2.14.1:
+
+| Model, atoms | fused | e3nn on GPU | CPU |
+|---|---|---|---|
+| 7net-0, 96 | 15.9 | 145 | 271 |
+| 7net-0, 768 | 65.1 | 1,011 | |
+| 7net-l3i5, 96 | 22.5 | 380 | 693 |
+| 7net-l3i5, 768 | 103 | > 20 GB | |
+| SevenNet-PM-S, 96 | 19.0 | 254 | 488 |
+| SevenNet-PM-S, 768 | 76.8 | > 20 GB | |
+
+"> 20 GB": stopped at the memory cap of the measurement; empty: not measured. Training numbers:
+`examples/apple_gpu/README.md`.
 
 ## Limits
 
