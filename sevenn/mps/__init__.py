@@ -5,6 +5,14 @@ moving the model away undoes it. SEVENN_DISABLE_MPS=1 keeps the reference e3nn c
 """
 
 from ._policy import disabled
-from .runtime import prepare, report, restore
 
 __all__ = ['disabled', 'prepare', 'report', 'restore']
+
+
+def __getattr__(name):
+    # the kernels load on first use, not on `import sevenn.mps._policy`
+    if name in ('prepare', 'report', 'restore'):
+        from . import runtime
+
+        return getattr(runtime, name)
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

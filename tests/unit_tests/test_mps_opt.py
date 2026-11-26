@@ -2067,3 +2067,50 @@ def test_half_precision_on_the_apple_gpu_keeps_the_reference_code():
     with pytest.warns(UserWarning, match='need float32 weights'):
         model.half()
     assert not _fused(model) and mps.report(model) == {}
+
+
+# ---- selection: device and opt-out ----
+
+
+@pytest.mark.parametrize(
+    'value, off',
+    [('1', True), ('true', True), (' Yes ', True), ('TRUE', True),
+     ('0', False), ('', False), ('no', False), ('off', False)],
+)  # fmt: skip
+def test_opt_out_values(value, off, monkeypatch):
+    monkeypatch.setenv('SEVENN_DISABLE_MPS', value)
+    assert mps.disabled() is off
+
+
+@pytest.mark.parametrize(
+    'cuda, apple, value, want',
+    [(True, True, '', 'cuda'), (False, True, '', 'mps'), (False, True, '1', 'cpu'),
+     (False, False, '', 'cpu'), (True, False, '1', 'cuda')],
+)  # fmt: skip
+def test_auto_device(cuda, apple, value, want, monkeypatch):
+    from sevenn.util import auto_device
+
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: cuda)
+    monkeypatch.setattr(torch.backends.mps, 'is_available', lambda: apple)
+    monkeypatch.setenv('SEVENN_DISABLE_MPS', value)
+    assert auto_device() == want
+
+
+@needs_mps
+def test_auto_and_explicit_devices_on_a_mac(monkeypatch):
+    monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
+    calc = SevenNetCalculator(_build(_config()), file_type='model_instance')
+    assert calc.device.type == 'mps' and _fused(calc.model)
+    calc = SevenNetCalculator(
+        _build(_config()), file_type='model_instance', device='cpu'
+    )
+    assert calc.device.type == 'cpu' and '_mps' not in calc.model.__dict__
+    monkeypatch.setenv('SEVENN_DISABLE_MPS', '1')
+    calc = SevenNetCalculator(_build(_config()), file_type='model_instance')
+    assert calc.device.type == 'cpu'
+    calc = SevenNetCalculator(
+        _build(_config()), file_type='model_instance', device='mps'
+    )  # opt-out on 'mps': the reference code, still in float32 on the GPU
+    assert calc.device.type == 'mps' and not _fused(calc.model)
+    assert all(p.dtype == torch.float32 for p in calc.model.parameters())
+    assert not calc.model._forward_pre_hooks

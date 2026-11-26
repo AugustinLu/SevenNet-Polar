@@ -21,6 +21,19 @@ if TYPE_CHECKING:
     from sevenn.checkpoint import SevenNetCheckpoint
 
 
+def auto_device() -> str:
+    """The device of device='auto': CUDA if available, else the Apple GPU (unless
+    SEVENN_DISABLE_MPS is set), else the CPU."""
+    if torch.cuda.is_available():
+        return 'cuda'
+    if torch.backends.mps.is_available():
+        from sevenn.mps._policy import disabled
+
+        if not disabled():
+            return 'mps'
+    return 'cpu'
+
+
 def to_atom_graph_list(atom_graph_batch) -> List[_const.AtomGraphDataType]:
     """
     torch_geometric batched data to separate list

@@ -109,8 +109,6 @@ def add_args(parser):
 
 
 def run(args):
-    import torch
-
     from sevenn.scripts.inference import inference
     from sevenn.util import pretrained_name_to_path
 
@@ -124,7 +122,9 @@ def run(args):
         warnings.warn('--enable_mps is deprecated: use --device mps', DeprecationWarning)
         device = 'mps'
     if device == 'auto':
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        from sevenn.util import auto_device
+
+        device = auto_device()
 
     targets = []
     for target in args.targets:

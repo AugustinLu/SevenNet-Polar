@@ -109,9 +109,7 @@ class SevenNetCalculator(Calculator):
 
         if isinstance(device, str):  # TODO: do we really need this?
             if device == 'auto':
-                self.device = torch.device(
-                    'cuda' if torch.cuda.is_available() else 'cpu'
-                )
+                self.device = torch.device(util.auto_device())
             else:
                 self.device = torch.device(device)
         else:
