@@ -2094,6 +2094,8 @@ def test_auto_device(cuda, apple, value, want, monkeypatch):
     monkeypatch.setattr(torch.backends.mps, 'is_available', lambda: apple)
     monkeypatch.setenv('SEVENN_DISABLE_MPS', value)
     assert auto_device() == want
+    # a deployed TorchScript model never goes to the Apple GPU by itself
+    assert auto_device(apple_gpu=False) == ('cuda' if cuda else 'cpu')
 
 
 @needs_mps

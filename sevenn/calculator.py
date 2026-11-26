@@ -109,7 +109,11 @@ class SevenNetCalculator(Calculator):
 
         if isinstance(device, str):  # TODO: do we really need this?
             if device == 'auto':
-                self.device = torch.device(util.auto_device())
+                # a deployed TorchScript model keeps float64 tensors, which the
+                # Apple GPU cannot hold, and has no modules to fuse
+                self.device = torch.device(
+                    util.auto_device(apple_gpu=file_type != 'torchscript')
+                )
             else:
                 self.device = torch.device(device)
         else:

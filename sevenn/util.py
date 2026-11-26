@@ -21,12 +21,12 @@ if TYPE_CHECKING:
     from sevenn.checkpoint import SevenNetCheckpoint
 
 
-def auto_device() -> str:
+def auto_device(apple_gpu: bool = True) -> str:
     """The device of device='auto': CUDA if available, else the Apple GPU (unless
-    SEVENN_DISABLE_MPS is set), else the CPU."""
+    SEVENN_DISABLE_MPS is set, or apple_gpu is False), else the CPU."""
     if torch.cuda.is_available():
         return 'cuda'
-    if torch.backends.mps.is_available():
+    if apple_gpu and torch.backends.mps.is_available():
         from sevenn.mps._policy import disabled
 
         if not disabled():
