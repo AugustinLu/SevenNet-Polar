@@ -95,7 +95,9 @@ def _field(calc, opt: dict):
     )
 
 
-KEYWORDS.update(efield=_efield, enforce_asr=_enforce_asr, efield_virial=_efield_virial)
+KEYWORDS.update(
+    efield=_efield, enforce_asr=_enforce_asr, efield_virial=_efield_virial
+)
 WRAP = _field
 # ---- end of SevenNet-Polar ----
 

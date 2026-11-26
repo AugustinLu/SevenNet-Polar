@@ -189,7 +189,9 @@ class SevenNetCalculator(Calculator):
         self.model.to(self.device)
         self.model.eval()
         if mps_opt is not None or mps_edge_bucket != 256:
-            _polar_03_apple_options(self.model, self.device, mps_opt, mps_edge_bucket)
+            _polar_03_apple_options(
+                self.model, self.device, mps_opt, mps_edge_bucket
+            )
         self.implemented_properties = [
             'free_energy',
             'energy',
@@ -313,8 +315,8 @@ def _polar_03_apple_options(model, device, mps_opt, bucket) -> None:
     if not isinstance(model, AtomGraphSequential):
         if mps_opt == 'fused':
             raise ValueError(
-                "mps_opt='fused' is not possible: a deployed TorchScript model has no "
-                'modules to switch'
+                "mps_opt='fused' is not possible: a deployed TorchScript model "
+                'has no modules to switch'
             )
         return
     from sevenn import mps

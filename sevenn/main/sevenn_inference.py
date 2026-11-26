@@ -119,7 +119,9 @@ def run(args):
 
     device = args.device
     if args.enable_mps:  # SevenNet-Polar 0.3; --device mps does the same
-        warnings.warn('--enable_mps is deprecated: use --device mps', DeprecationWarning)
+        warnings.warn(
+            '--enable_mps is deprecated: use --device mps', DeprecationWarning
+        )
         device = 'mps'
     if device == 'auto':
         from sevenn.util import auto_device

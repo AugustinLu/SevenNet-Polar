@@ -1,5 +1,5 @@
-"""What happens when a SevenNet model moves to the Apple GPU (AtomGraphSequential._apply
-calls apply() for a move to or from 'mps').
+"""What happens when a SevenNet model moves to the Apple GPU
+(AtomGraphSequential._apply calls apply() for a move to or from 'mps').
 
 Before the move, float64 parameters and buffers become float32 (MPS has no float64).
 After it, supported modules switch to the fused kernels (modules.enable) and two
@@ -110,7 +110,9 @@ def prepare(model, bucket: int = BUCKET) -> Dict[str, int]:
     other = {p.dtype for p in model.parameters() if p.is_floating_point()}
     other -= {torch.float32}
     if other:
-        problem = f'the fused kernels need float32 weights, not {sorted(map(str, other))}'
+        problem = (
+            f'the fused kernels need float32 weights, not {sorted(map(str, other))}'
+        )
     if problem is not None:
         warnings.warn(f'the reference e3nn code runs on the Apple GPU: {problem}')
         model.__dict__['_mps'] = MpsState({}, None, 0, cutoff)
@@ -129,8 +131,8 @@ def prepare(model, bucket: int = BUCKET) -> Dict[str, int]:
             padded = int(bucket)
         else:
             warnings.warn(
-                'edge padding disabled: pad edges would not be silent for this model, '
-                'and memory may grow with each new edge count'
+                'edge padding disabled: pad edges would not be silent for this '
+                'model, and memory may grow with each new edge count'
             )
     model.__dict__['_mps'] = MpsState(report, plan, padded, cutoff)
     if padded:
@@ -178,4 +180,3 @@ def _unpad_hook(model, args, out):
     if n_real is not None:
         unpad(out, n_real)
     return None
-

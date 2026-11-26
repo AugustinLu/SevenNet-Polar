@@ -29,7 +29,6 @@ import torch
 from e3nn.nn import Gate
 from e3nn.o3 import FullyConnectedTensorProduct, Linear, TensorProduct
 
-
 from sevenn.nn.convolution import IrrepsConvolution
 from sevenn.nn.node_embedding import OnehotEmbedding
 from sevenn.nn.self_connection import SelfConnectionIntro

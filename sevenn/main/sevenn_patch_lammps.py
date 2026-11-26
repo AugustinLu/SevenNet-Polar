@@ -38,7 +38,10 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(  # SevenNet-Polar 0.3; now detected
-        '--enable_mps', dest='enable_mps', help=argparse.SUPPRESS, action='store_true'
+        '--enable_mps',
+        dest='enable_mps',
+        help=argparse.SUPPRESS,
+        action='store_true'
     )
     # cxx_standard is detected automatically
 
@@ -65,7 +68,8 @@ def run(args):
 
     if args.enable_mps and (args.d3 or args.enable_flash or args.enable_oeq):
         raise ValueError(
-            '--enable_mps cannot be combined with --d3, --enable_flash or --enable_oeq'
+            '--enable_mps cannot be combined with --d3, --enable_flash or '
+            '--enable_oeq'
         )
     if args.enable_mps or _apple_gpu(args):
         print('  - Apple GPU pair style (serial; SEVENN_DISABLE_MPS=1 for CUDA)')

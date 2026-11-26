@@ -4,9 +4,9 @@ where no Apple GPU exists: a skip is not a pass."""
 import os
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -18,10 +18,10 @@ from e3nn.o3 import Irreps, Linear, TensorProduct
 
 import sevenn._keys as KEY
 import sevenn.train.dataload as dl
+from sevenn import mps
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.calculator import SevenNetCalculator
 from sevenn.model_build import build_E3_equivariant_model
-from sevenn import mps
 from sevenn.mps import runtime as mps_runtime
 from sevenn.mps.kernels import generate_msl, probe_cg
 from sevenn.mps.modules import mps_torch_supported
@@ -1004,7 +1004,8 @@ _PLUGIN = str(
     / 'e3gnnmpsplugin.so'
 )
 needs_plugin = pytest.mark.skipif(
-    not Path(_PLUGIN).exists(), reason='sevenn/mps/lammps/src/build_plugin.sh not run'
+    not Path(_PLUGIN).exists(),
+    reason='sevenn/mps/lammps/src/build_plugin.sh not run',
 )
 
 
@@ -1539,7 +1540,7 @@ def test_patch_lammps_reports_failure(extra):
         assert 'Apple GPU pair style' in p.stdout  # detected on a Mac
 
 
-def test_patch_lammps_on_a_mac_picks_the_apple_gpu_unless_told_otherwise(monkeypatch):
+def test_patch_lammps_on_a_mac_picks_the_apple_gpu_unless_disabled(monkeypatch):
     from argparse import Namespace
 
     from sevenn.main.sevenn_patch_lammps import _apple_gpu
@@ -1993,9 +1994,6 @@ def test_output_and_input_keep_the_real_edges_only():
     assert out[KEY.POS].shape[0] == n_atoms
     assert torch.equal(out[KEY.EDGE_IDX], idx)
     assert batch[KEY.EDGE_IDX].shape[1] == n_real  # the input object too
-
-
-
 
 
 @needs_mps
