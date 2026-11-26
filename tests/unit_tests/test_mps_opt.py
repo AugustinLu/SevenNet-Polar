@@ -953,7 +953,7 @@ def test_edge_plan_notices_new_tensors_and_in_place_changes():
 @pytest.mark.parametrize('method', METHODS)
 def test_lammps_bridge_equals_the_calculator(method, tmp_path):
     lammps = pytest.importorskip('lammps')
-    from sevenn.lammps_external import run_input
+    from sevenn.mps.lammps.external import run_input
 
     calc = SevenNetCalculator(
         _build(_config(method=method)), file_type='model_instance', device='mps'
@@ -996,10 +996,15 @@ run 0
 
 
 _PLUGIN = str(
-    Path(__file__).parents[2] / 'sevenn' / 'pair_e3gnn_mps' / 'e3gnnmpsplugin.so'
+    Path(__file__).parents[2]
+    / 'sevenn'
+    / 'mps'
+    / 'lammps'
+    / 'src'
+    / 'e3gnnmpsplugin.so'
 )
 needs_plugin = pytest.mark.skipif(
-    not Path(_PLUGIN).exists(), reason='pair_e3gnn_mps/build_plugin.sh not run'
+    not Path(_PLUGIN).exists(), reason='sevenn/mps/lammps/src/build_plugin.sh not run'
 )
 
 
@@ -1053,7 +1058,7 @@ def test_pair_style_equals_the_calculator(tmp_path):
     'coeff, message',
     [
         ('7net-0 Na', 'not enough elements'),
-        ('7net-0 Na Xx', 'unknown'),
+        ('7net-0 Na Xx', 'neither a keyword'),
         ('deployed.pt Na Cl', 'deployed'),
     ],
 )
@@ -1228,7 +1233,7 @@ class _FakeLammps:
 
 
 def test_external_bridge_refuses_ranks_and_units():
-    from sevenn.lammps_external import attach
+    from sevenn.mps.lammps.external import attach
 
     with pytest.raises(ValueError, match='one MPI rank'):
         attach(_FakeLammps(2, 'metal'), None, ['Na'])
@@ -1242,7 +1247,7 @@ def test_external_bridge_virial_on_a_slab(tmp_path):
     lammps = pytest.importorskip('lammps')
     from ase.io import write
 
-    from sevenn.lammps_external import run_input
+    from sevenn.mps.lammps.external import run_input
 
     calc = SevenNetCalculator('7net-0', device='mps')
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
@@ -1459,7 +1464,7 @@ def test_self_connection_uses_e3nn_when_types_carry_gradients():
 
 
 def test_pair_coeff_parser_says_what_is_wrong():
-    from sevenn.lammps_pair import _parse
+    from sevenn.mps.lammps.pair import _parse
 
     with pytest.raises(ValueError, match='modal requires'):
         _parse(['modal'])
@@ -1475,7 +1480,7 @@ def test_pair_coeff_parser_says_what_is_wrong():
 
 @needs_mps
 def test_driver_with_no_atoms_gives_zero():
-    from sevenn.lammps_pair import PairDriver
+    from sevenn.mps.lammps.pair import PairDriver
 
     box = ((0.0, 0.0, 0.0), (10.0, 10.0, 10.0), 0.0, 0.0, 0.0, (0, 0, 0))
     driver = PairDriver(['7net-0', 'Na', 'Cl'], 2, box)
@@ -1494,7 +1499,7 @@ def test_driver_with_no_atoms_gives_zero():
 
 
 def test_run_input_joins_continued_lines(tmp_path):
-    from sevenn.lammps_external import run_input
+    from sevenn.mps.lammps.external import run_input
 
     class Fake(_FakeLammps):
         def __init__(self):
@@ -1518,20 +1523,48 @@ def test_run_input_joins_continued_lines(tmp_path):
     assert 'print "Step #1"' in lmp.seen
 
 
-def test_patch_lammps_reports_failure():
+@pytest.mark.parametrize('extra', [[], ['--enable_mps']])
+def test_patch_lammps_reports_failure(extra):
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).parents[2]))
+    env.pop('SEVENN_DISABLE_MPS', None)
     p = subprocess.run(
-        [
-            sys.executable,
-            '-m',
-            'sevenn.main.sevenn_patch_lammps',
-            '/no/such/folder',
-            '--enable_mps',
-        ],
+        [sys.executable, '-m', 'sevenn.main.sevenn_patch_lammps', '/no/such/folder']
+        + extra,
         capture_output=True,
+        text=True,
         env=env,
     )
     assert p.returncode != 0
+    if torch.backends.mps.is_available() and not torch.cuda.is_available():
+        assert 'Apple GPU pair style' in p.stdout  # detected on a Mac
+
+
+def test_patch_lammps_on_a_mac_picks_the_apple_gpu_unless_told_otherwise(monkeypatch):
+    from argparse import Namespace
+
+    from sevenn.main.sevenn_patch_lammps import _apple_gpu
+
+    args = Namespace(d3=False, enable_flash=False, enable_oeq=False)
+    monkeypatch.setattr(sys, 'platform', 'darwin')
+    monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
+    monkeypatch.setattr(torch.backends.mps, 'is_available', lambda: True)
+    monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
+    assert _apple_gpu(args)
+    assert not _apple_gpu(Namespace(d3=True, enable_flash=False, enable_oeq=False))
+    monkeypatch.setenv('SEVENN_DISABLE_MPS', '1')
+    assert not _apple_gpu(args)
+    monkeypatch.delenv('SEVENN_DISABLE_MPS')
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    assert not _apple_gpu(args)
+
+
+def test_polar_03_module_names_still_import():
+    # LAMMPS binaries built with SevenNet-Polar 0.3 import sevenn.lammps_pair
+    from sevenn.lammps_external import run_input
+    from sevenn.lammps_pair import PairDriver
+    from sevenn.mps.lammps import external, pair
+
+    assert PairDriver is pair.PairDriver and run_input is external.run_input
 
 
 # ---- edge cases ----
@@ -1720,7 +1753,7 @@ def test_external_bridge_stops_when_the_calculator_fails(tmp_path):
     from ase.calculators.calculator import Calculator, all_changes
     from ase.io import write
 
-    from sevenn.lammps_external import run_input
+    from sevenn.mps.lammps.external import run_input
 
     class Failing(Calculator):
         implemented_properties = ['energy', 'forces', 'stress']
@@ -2116,3 +2149,109 @@ def test_auto_and_explicit_devices_on_a_mac(monkeypatch):
     assert calc.device.type == 'mps' and not _fused(calc.model)
     assert all(p.dtype == torch.float32 for p in calc.model.parameters())
     assert not calc.model._forward_pre_hooks
+
+
+# ---- LAMMPS pair style: tests from the upstream PR ----
+
+
+@needs_mps
+@needs_plugin
+def test_pair_style_multi_fidelity(tmp_path):
+    at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
+    at.rattle(0.05, seed=5)
+    lmp = _pair_lammps(tmp_path, at, '7net-mf-0 modal PBE Na Cl')
+    lmp.command('run 0')
+    pe = lmp.get_thermo('pe')
+    lmp.close()
+    at.calc = SevenNetCalculator('7net-mf-0', device='mps', modal='PBE')
+    assert abs(pe - at.get_potential_energy()) < 1e-3
+
+
+@needs_mps
+@needs_plugin
+@pytest.mark.parametrize('case', ['include', 'hybrid'])
+def test_pair_style_refuses_include_and_hybrid(tmp_path, case):
+    lammps = pytest.importorskip('lammps')
+    from ase.io import write
+
+    at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
+    write(
+        tmp_path / 'at.data',
+        at,
+        format='lammps-data',
+        specorder=['Na', 'Cl'],
+        atom_style='atomic',
+    )
+    lines = [f'plugin load {_PLUGIN}', 'units metal', 'atom_style atomic']
+    if case == 'include':
+        lines.append('atom_modify first na')
+    lines += [
+        f'read_data {tmp_path / "at.data"}',
+        'mass 1 22.99',
+        'mass 2 35.45',
+        'group na type 1',
+    ]
+    if case == 'include':
+        lines += [
+            'pair_style e3gnn',
+            'pair_coeff * * 7net-0 Na Cl',
+            'neigh_modify include na',
+        ]
+    else:
+        lines += [
+            'pair_style hybrid e3gnn zero 5.0',
+            'pair_coeff * * e3gnn 7net-0 Na Cl',
+            'pair_coeff 1 1 zero',  # both sub-styles in use: the check is ours
+        ]
+    lmp = lammps.lammps(cmdargs=['-screen', 'none', '-log', 'none'])
+    for line in lines:
+        lmp.command(line)
+    message = (
+        'neigh_modify include'
+        if case == 'include'
+        else 'cannot be a sub-style of pair_style hybrid'
+    )
+    with pytest.raises(Exception, match=message):
+        lmp.command('run 0')
+    lmp.close()
+
+
+@needs_mps
+@needs_plugin
+def test_pair_style_pressure_tensor_on_a_tilted_cell(tmp_path):
+    from ase import Atoms
+
+    at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
+    at.set_cell(at.cell + [[0, 0, 0], [0.7, 0, 0], [0.4, -0.3, 0]], scale_atoms=True)
+    at.rattle(0.05, seed=6)
+    lmp = _pair_lammps(tmp_path, at, '7net-0 Na Cl')
+    lmp.command('thermo_style custom step pe pxx pyy pzz pxy pxz pyz')
+    calc = SevenNetCalculator('7net-0', device='mps')
+
+    def in_lammps_frame():
+        # the structure as the pair style sees it: LAMMPS's frame, after any motion
+        lo, hi, xy, yz, xz, _, _ = lmp.extract_box()
+        ids = lmp.numpy.extract_atom('id')[: len(at)].copy()
+        order = np.argsort(ids)
+        x = lmp.numpy.extract_atom('x')[: len(at)].copy()[order]
+        a, b, c = (hi[k] - lo[k] for k in range(3))
+        cell = [[a, 0, 0], [xy, b, 0], [xz, yz, c]]
+        ref = Atoms(at.get_chemical_symbols(), positions=x, cell=cell, pbc=True)
+        ref.calc = calc
+        return ref, lmp.numpy.extract_atom('f')[: len(at)].copy()[order]
+
+    lmp.command('run 0')
+    press = [lmp.get_thermo(k) for k in ('pxx', 'pyy', 'pzz', 'pxy', 'pxz', 'pyz')]
+    ref, _ = in_lammps_frame()
+    s = ref.get_stress(voigt=True) * 1602176.634  # xx yy zz yz xz xy, bar
+    want = [-s[0], -s[1], -s[2], -s[5], -s[4], -s[3]]
+    assert abs(want[3]) > 10.0  # a real shear component
+    assert np.abs(np.array(press) - np.array(want)).max() < 2.0
+    # a few MD steps: atoms move, and may leave the box between re-neighbouring
+    for line in ('velocity all create 600 3', 'fix md all nve', 'run 5'):
+        lmp.command(line)
+    pe = lmp.get_thermo('pe')
+    ref, fl = in_lammps_frame()
+    lmp.close()
+    assert abs(pe - ref.get_potential_energy()) < 1e-3
+    assert np.abs(fl - ref.get_forces()).max() < 2e-4

@@ -37,16 +37,24 @@ def add_args(parser):
         help='Enable OpenEquivariance',
         action='store_true',
     )
-    ag.add_argument(
-        '--enable_mps',
-        dest='enable_mps',
-        help=(
-            'Serial pair style for the Apple GPU '
-            '(no libtorch link, no deploy step)'
-        ),
-        action='store_true',
+    ag.add_argument(  # SevenNet-Polar 0.3; now detected
+        '--enable_mps', dest='enable_mps', help=argparse.SUPPRESS, action='store_true'
     )
     # cxx_standard is detected automatically
+
+
+def _apple_gpu(args) -> bool:
+    """A Mac with an Apple GPU and no CUDA gets the Apple GPU pair style, unless a
+    CUDA-only option is given or SEVENN_DISABLE_MPS is set."""
+    import torch
+
+    if args.d3 or args.enable_flash or args.enable_oeq or sys.platform != 'darwin':
+        return False
+    if torch.cuda.is_available() or not torch.backends.mps.is_available():
+        return False
+    from sevenn.mps._policy import disabled
+
+    return not disabled()
 
 
 def run(args):
@@ -55,16 +63,15 @@ def run(args):
     print('Patching LAMMPS with the following settings:')
     print('  - LAMMPS source directory:', lammps_dir)
 
-    if args.enable_mps:
-        if args.d3 or args.enable_flash or args.enable_oeq:
-            raise ValueError(
-                '--enable_mps cannot be combined with --d3, '
-                '--enable_flash or --enable_oeq'
-            )
-        print('  - Apple GPU support enabled')
-        root = osp.abspath(f'{os.path.dirname(__file__)}/../..')
-        script = osp.join(pair_e3gnn_dir + '_mps', 'patch_lammps.sh')
-        return subprocess.run([script, lammps_dir, sys.executable, root]).returncode
+    if args.enable_mps and (args.d3 or args.enable_flash or args.enable_oeq):
+        raise ValueError(
+            '--enable_mps cannot be combined with --d3, --enable_flash or --enable_oeq'
+        )
+    if args.enable_mps or _apple_gpu(args):
+        print('  - Apple GPU pair style (serial; SEVENN_DISABLE_MPS=1 for CUDA)')
+        from sevenn.mps.lammps.patch import patch
+
+        return patch(lammps_dir)
 
     cxx_standard = '17'  # always 17
 

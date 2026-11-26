@@ -1,7 +1,7 @@
 /* Pair style e3gnn on the Apple GPU as a LAMMPS plugin, for `pip install lammps` without a rebuild. See build_plugin.sh.
    Two steps, as the pair style needs Python symbols at load time: this file loads libpython when the process has none
    (inside Python, a second libpython would be a second runtime), then the pair style itself, e3gnnmpscore.so.
-   Part of SevenNet-Polar, MIT license (see LICENSE). Loaded by LAMMPS, the combined program is covered by the GPL
+   Part of SevenNet, MIT license (see LICENSE). Loaded by LAMMPS, the combined program is covered by the GPL
    of LAMMPS. */
 #include <dlfcn.h>
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Patch a LAMMPS source tree with pair style e3gnn for the Apple GPU. usage: patch_lammps.sh LAMMPS_ROOT PYTHON SEVENN_ROOT
-# No libtorch link: the model runs in the Python environment PYTHON. Called by `sevenn patch_lammps --enable_mps`.
+# No libtorch link: the model runs in the Python environment PYTHON. Called by `sevenn patch_lammps` on a Mac.
 set -e
 root="$1"; py="$2"; sevenn_root="$3"
 HERE="$(cd "$(dirname "$0")" && pwd)"
