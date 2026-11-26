@@ -10,13 +10,12 @@ disable(model) undoes it, and enable() again starts from scratch. runtime.py cal
 both when a model moves to or from the Apple GPU.
 
 In eval mode the kernels treat the weights of linear and self-connection layers as
-constants: derivatives with respect to positions, strain and field are complete,
+constants: derivatives with respect to the inputs (positions, strain) are complete,
 parameter gradients are not. For those use train mode or move the model off the
-Apple GPU. Changes through
-load_state_dict, an optimizer or in-place operations on a parameter are noticed
-before the next call (parameter identity and version counter), and module conversions
-(.to, .half, .float) drop the derived tables; writes through param.data are not
-noticed, move the model to the CPU and back after those.
+Apple GPU. Changes through load_state_dict, an optimizer or in-place operations on a
+parameter are noticed before the next call (parameter identity and version counter),
+and module conversions (.to, .half, .float) drop the derived tables; writes through
+param.data are not noticed, move the model to the CPU and back after those.
 
 """
 

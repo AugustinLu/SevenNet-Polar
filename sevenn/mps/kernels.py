@@ -37,8 +37,8 @@ def _check_int32(where: str, *sizes: int) -> None:
     """The kernels index buffers with 32-bit integers."""
     if max(sizes) >= 2**31:
         raise RuntimeError(
-            f'{where}: graph too large for the fused kernels (32-bit indices), use '
-            f"mps_opt='off'"
+            f'{where}: graph too large for the fused kernels (32-bit indices); '
+            f'SEVENN_DISABLE_MPS=1 runs the reference e3nn code'
         )
 
 
@@ -300,7 +300,7 @@ def _first_order_only():
             'fused Metal kernels of linear and gate layers have first derivatives '
             'only in eval mode. For second derivatives use train mode, whose '
             'PyTorch path for those layers has derivatives to any order, or '
-            "mps_opt='off'."
+            'SEVENN_DISABLE_MPS=1.'
         )
 
 

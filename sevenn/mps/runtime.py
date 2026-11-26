@@ -13,6 +13,7 @@ that object, as moving it changes its device for everyone. Nothing is registered
 the state dict.
 """
 
+import os
 import warnings
 from typing import Dict, Optional
 
@@ -82,6 +83,12 @@ def prepare(model, bucket: int = BUCKET) -> Dict[str, int]:
     """Fused kernels and edge padding for a model on the Apple GPU; starts from
     scratch on every call. Returns the report (empty with the reference code)."""
     restore(model)
+    if os.environ.get('PYTORCH_ENABLE_MPS_FALLBACK') == '1':
+        warnings.warn(
+            'PYTORCH_ENABLE_MPS_FALLBACK=1 lets PyTorch run unsupported operations '
+            'on the CPU without telling you; SevenNet does not need it on the Apple '
+            'GPU'
+        )
     cuda_only = sorted(
         {
             type(m.convolution).__name__

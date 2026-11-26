@@ -1758,3 +1758,10 @@ def test_auto_and_explicit_devices_on_a_mac(monkeypatch):
 
 
 # ---- LAMMPS pair style: tests from the upstream PR ----
+
+
+@needs_mps
+def test_cpu_fallback_of_pytorch_is_warned_about(monkeypatch):
+    monkeypatch.setenv('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+    with pytest.warns(UserWarning, match='PYTORCH_ENABLE_MPS_FALLBACK'):
+        _build(_config()).to('mps')
