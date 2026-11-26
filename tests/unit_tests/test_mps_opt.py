@@ -768,7 +768,7 @@ def test_weight_map_refuses_a_map_that_is_not_one_weight_per_entry():
 
     w = torch.nn.Parameter(torch.ones(3, dtype=torch.float64))
     with pytest.raises(NotImplementedError, match='one weight times a constant'):
-        _weight_map(None, w, lambda: torch.stack([w[0] * w[1], w[2]]))
+        _weight_map(w, lambda: torch.stack([w[0] * w[1], w[2]]))
 
 
 @needs_mps
@@ -1971,3 +1971,39 @@ def test_padder_is_off_when_a_convolution_stays_on_e3nn():
     conv.__class__ = mps_opt.IrrepsConvolution
     with pytest.warns(UserWarning, match='edge padding of batches disabled'):
         assert mps_padding.BatchPadder(model).bucket == 0
+
+
+@needs_mps
+def test_second_derivatives_raise_in_the_gate_kernel():
+    from sevenn.mps import modules as mps_opt
+
+    gate = (
+        Gate('2x0e', [torch.nn.functional.silu], '1x0e', [torch.tanh], '1x1o')
+        .to('mps')
+        .eval()
+    )
+    gate._tables = mps_opt._gate_tables(gate, 'mps')
+    gate.__class__ = mps_opt.FusedGate
+    x = torch.randn(5, gate.irreps_in.dim, device='mps', requires_grad=True)
+    with pytest.raises(
+        RuntimeError, match='linear and gate layers have first derivatives only'
+    ):
+        torch.autograd.grad(gate(x).pow(2).sum(), x, create_graph=True)
+
+
+@needs_mps
+@pytest.mark.parametrize('modal', ['R2SCAN', 'PBE'])
+def test_multi_fidelity_model_equals_e3nn(modal):
+    at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
+    at.rattle(0.05, seed=3)
+    res = {}
+    for opt in (None, 'off'):
+        calc = SevenNetCalculator('7net-mf-0', device='mps', modal=modal, mps_opt=opt)
+        if opt is None:
+            assert calc.mps_runtime.report['conv_fused'] > 0
+        a = at.copy()
+        a.calc = calc
+        res[opt] = (a.get_potential_energy(), a.get_forces(), a.get_stress())
+    assert abs(res[None][0] - res['off'][0]) < 1e-4
+    assert np.abs(res[None][1] - res['off'][1]).max() < 1e-4
+    assert np.abs(res[None][2] - res['off'][2]).max() < 1e-6

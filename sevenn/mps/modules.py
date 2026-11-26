@@ -48,8 +48,8 @@ from .kernels import (
 ALL_PARTS = frozenset({'conv', 'linear', 'selfconn', 'gate'})
 # train mode: up to this many atom types, multiply by every type's matrix and select
 SELFCONN_ALL_TYPES = 8
-# above this PyTorch's mm beats the sparse kernel (M: 133 -> 100 ms at 324 atoms; S
-# unaffected)
+# above this many nonzeros PyTorch's dense mm beats the sparse kernel (measured on
+# an M5 Pro with a larger model: 133 -> 100 ms per step at 324 atoms)
 LINEAR_MAX_NNZ = 100_000
 
 
@@ -70,7 +70,7 @@ def _matrix_triplets(fn, ni: int, batch: int = 2048):
     return np.concatenate(II), np.concatenate(OO), np.concatenate(VV)
 
 
-def _weight_map(probe, param, run):
+def _weight_map(param, run):
     """Which entry of `param` and which constant give each nonzero output of the
     linear map `run`, read off by probing: weights all one give the constants,
     weights 1, 2, 3, ... the index, and random weights check that each nonzero output
@@ -261,7 +261,7 @@ class FusedLinear(_DerivedTables, Linear):
                 if probe.bias.numel():
                     probe.bias.zero_()
             mat = _TrainMatrix(
-                *_weight_map(probe, probe.weight, lambda: _by_rows(probe, ni)),
+                *_weight_map(probe.weight, lambda: _by_rows(probe, ni)),
                 (ni, no),
                 self.weight.device,
             )
@@ -271,7 +271,6 @@ class FusedLinear(_DerivedTables, Linear):
                     probe.weight.zero_()
                 vec = _TrainMatrix(
                     *_weight_map(
-                        probe,
                         probe.bias,
                         lambda: probe(torch.zeros(1, ni, dtype=torch.float64))[0],
                     ),
@@ -703,7 +702,8 @@ def enable(model, parts='all') -> Dict[str, int]:
                 m._kernels, m._plan = FusedTP(m.convolution), plan
                 m.__class__ = FusedConvolution
                 report['conv_fused'] += 1
-            except (NotImplementedError, ValueError) as e:
+            except (NotImplementedError, ValueError, RuntimeError) as e:
+                # RuntimeError: the generated shader did not compile
                 warnings.warn(f'convolution keeps the e3nn code on the GPU: {e}')
                 report['conv_e3nn'] += 1
         elif (

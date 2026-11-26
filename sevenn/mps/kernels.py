@@ -33,6 +33,15 @@ from e3nn import o3
 _libs: Dict[str, object] = {}
 
 
+def _check_int32(where: str, *sizes: int) -> None:
+    """The kernels index buffers with 32-bit integers."""
+    if max(sizes) >= 2**31:
+        raise RuntimeError(
+            f'{where}: graph too large for the fused kernels (32-bit indices), use '
+            f"mps_opt='off'"
+        )
+
+
 def _check_inputs(where: str, *checks) -> None:
     """Kernels read raw buffers with no bounds checks, so each (tensor, shape) must
     be float32 of that shape first."""
@@ -507,17 +516,11 @@ class FusedUvu(_UvuFwd):
     @staticmethod
     def forward(ctx, x, y, w, K: FusedTP, plan: EdgePlan):
         # the kernels index with 32-bit integers
-        if (
-            max(
-                plan.num_edges * max(K.mul * K.ny, K.nw),
-                plan.num_nodes * max(K.nx, K.nout),
-            )
-            >= 2**31
-        ):
-            raise RuntimeError(
-                'graph too large for the fused kernels (32-bit indices), use '
-                "mps_opt='off'"
-            )
+        _check_int32(
+            'convolution kernel',
+            plan.num_edges * max(K.mul * K.ny, K.nw),
+            plan.num_nodes * max(K.nx, K.nout),
+        )
         _check_inputs(
             'uvu kernel',
             (x, (plan.num_nodes, K.nx)),
@@ -609,6 +612,7 @@ class CsrMap:
 class CsrApply(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, M: CsrMap, types: Optional[torch.Tensor]):
+        _check_int32('linear kernel', x.shape[0] * max(M.ni, M.no))
         _check_inputs('linear kernel', (x, (x.shape[0], M.ni)))
         if M.nt > 1 and (
             types is None
@@ -625,9 +629,10 @@ class CsrApply(torch.autograd.Function):
         ctx.M, ctx.types = M, types if types is not None else M.notype
         x = x.contiguous()
         out = x.new_empty((x.shape[0], M.no))
-        _lib(_CSR_SHADER).csr_mm(
-            out, x, *M.fwd, M.bias, ctx.types, M.dfwd, threads=(M.no, x.shape[0])
-        )
+        if x.shape[0] > 0:  # no launch on an empty grid
+            _lib(_CSR_SHADER).csr_mm(
+                out, x, *M.fwd, M.bias, ctx.types, M.dfwd, threads=(M.no, x.shape[0])
+            )
         return out
 
     @staticmethod
@@ -636,15 +641,16 @@ class CsrApply(torch.autograd.Function):
         M = ctx.M
         obar = obar.contiguous()
         xbar = obar.new_empty((obar.shape[0], M.ni))
-        _lib(_CSR_SHADER).csr_mm(
-            xbar,
-            obar,
-            *M.adj,
-            M.zero,
-            ctx.types,
-            M.dadj,
-            threads=(M.ni, obar.shape[0]),
-        )
+        if obar.shape[0] > 0:
+            _lib(_CSR_SHADER).csr_mm(
+                xbar,
+                obar,
+                *M.adj,
+                M.zero,
+                ctx.types,
+                M.dadj,
+                threads=(M.ni, obar.shape[0]),
+            )
         return xbar, None, None
 
 
@@ -709,14 +715,16 @@ class GateTables:
 class GateApply(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, T: GateTables):
+        _check_int32('gate kernel', x.shape[0] * max(T.n_in, T.nout))
         _check_inputs('gate kernel', (x, (x.shape[0], T.n_in)))
         x = x.contiguous()
         ctx.save_for_backward(x)
         ctx.T = T
         out = x.new_empty((x.shape[0], T.nout))
-        _lib(_GATE_SHADER).gate_fwd(
-            out, x, *T.tables, T.dims, threads=(T.nout, x.shape[0])
-        )
+        if x.shape[0] > 0:  # no launch on an empty grid
+            _lib(_GATE_SHADER).gate_fwd(
+                out, x, *T.tables, T.dims, threads=(T.nout, x.shape[0])
+            )
         return out
 
     @staticmethod
@@ -725,7 +733,8 @@ class GateApply(torch.autograd.Function):
         (x,) = ctx.saved_tensors
         T = ctx.T
         xbar = x.new_empty(x.shape)
-        _lib(_GATE_SHADER).gate_adj(
-            xbar, obar.contiguous(), x, *T.tables, T.dims, threads=x.shape[0]
-        )
+        if x.shape[0] > 0:
+            _lib(_GATE_SHADER).gate_adj(
+                xbar, obar.contiguous(), x, *T.tables, T.dims, threads=x.shape[0]
+            )
         return xbar, None

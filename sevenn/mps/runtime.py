@@ -132,6 +132,8 @@ class MpsRuntime:
         self.num_edges = graph[KEY.EDGE_IDX].shape[1]
         if self.plan is None:
             return graph
+        if torch.is_autocast_enabled('mps'):  # the convolutions would use e3nn
+            return graph
         graph = pad_edges(graph, self.cutoff, self.bucket)
         self.plan.expect_padded = (self.num_edges, graph[KEY.EDGE_IDX].shape[1])
         return graph

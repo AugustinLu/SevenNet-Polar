@@ -25,7 +25,7 @@ class BatchPadder:
     PyTorch's MPS backend compiles a graph for every new shape of an operation
     and keeps it for the life of the process. A shuffled data set gives almost
     every batch a new number of edges, so without padding the process grows by
-    about a gigabyte a minute in training. Pad edges are those of pad_edges: atom
+    one to two gigabytes a minute in training. Pad edges are those of pad_edges: atom
     0 to atom 0 with vector (cutoff, 0, 0), placed after the real edges, where the
     kernels never look. Energy, forces, stress, Born charges and every gradient
     are therefore those of the unpadded batch. Off (bucket 0) when a convolution
@@ -54,8 +54,19 @@ class BatchPadder:
             return
         self.bucket = int(bucket)
 
+    def run(self, model, batch):
+        """model(self(batch)), with the padding note cleared however the call ends:
+        a call that fails before its first convolution must not leave it for the
+        next graph."""
+        try:
+            return model(self(batch))
+        finally:
+            if self.plan is not None:
+                self.plan.expect_padded = None
+
     def __call__(self, batch):
-        if not self.bucket:
+        # under autocast the convolutions fall back to e3nn, which would visit pads
+        if not self.bucket or torch.is_autocast_enabled('mps'):
             return batch
         idx = batch[KEY.EDGE_IDX]
         n_real = int(idx.shape[1])
@@ -115,6 +126,9 @@ def padding_is_safe(model, cutoff: float, all_fused: bool = False) -> bool:
     vec = torch.tensor(
         [[cutoff, 0.0, 0.0]], dtype=torch.float32, device=device, requires_grad=True
     )
+    if 'edge_embedding' not in model._modules:
+        warnings.warn('edge padding disabled: the model has no edge_embedding')
+        return False
     data = model._modules['edge_embedding']({KEY.EDGE_VEC: vec})
     emb = data[KEY.EDGE_EMBEDDING]
     tensors = [emb] + [
