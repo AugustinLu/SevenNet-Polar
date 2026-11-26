@@ -27,9 +27,9 @@ def auto_device(apple_gpu: bool = True) -> str:
     if torch.cuda.is_available():
         return 'cuda'
     if apple_gpu and torch.backends.mps.is_available():
-        from sevenn.mps._policy import disabled
+        from sevenn.mps._policy import disabled, torch_supported
 
-        if not disabled():
+        if not disabled() and torch_supported():
             return 'mps'
     return 'cpu'
 

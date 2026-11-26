@@ -33,6 +33,7 @@ from sevenn.nn.convolution import IrrepsConvolution
 from sevenn.nn.node_embedding import OnehotEmbedding
 from sevenn.nn.self_connection import SelfConnectionIntro
 
+from . import _policy
 from .kernels import (
     CsrApply,
     CsrMap,
@@ -750,22 +751,8 @@ def enable(model, parts='all') -> Dict[str, int]:
     return report
 
 
-_MPS_TORCH_OK: Optional[bool] = None
-
-
 def mps_torch_supported() -> bool:
-    """Whether this PyTorch can run SevenNet on the Apple GPU at all. The message
-    scatter of the e3nn code (scatter_reduce) has an MPS kernel from PyTorch 2.6."""
-    global _MPS_TORCH_OK
-    if _MPS_TORCH_OK is None:
-        try:
-            x = torch.zeros(2, device='mps')
-            idx = torch.zeros(1, dtype=torch.long, device='mps')
-            x.scatter_reduce_(0, idx, torch.ones(1, device='mps'), reduce='sum')
-            _MPS_TORCH_OK = True
-        except (NotImplementedError, RuntimeError):
-            _MPS_TORCH_OK = False
-    return _MPS_TORCH_OK
+    return _policy.torch_supported()
 
 
 def check_torch(purpose: str) -> None:

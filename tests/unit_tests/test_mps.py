@@ -1384,7 +1384,7 @@ def test_old_pytorch_is_refused_with_a_clear_error(monkeypatch):
     from sevenn.mps import modules as mps_opt
     from sevenn.train.trainer import Trainer
 
-    monkeypatch.setattr(mps_opt, '_MPS_TORCH_OK', False)
+    monkeypatch.setattr(mps_opt._policy, '_TORCH_OK', False)
     for off in (False, True):
         with pytest.raises(RuntimeError, match='PyTorch 2.6 or later'):
             _calc(_build(_config()), off=off)
@@ -1727,10 +1727,14 @@ def test_auto_device(cuda, apple, value, want, monkeypatch):
 
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: cuda)
     monkeypatch.setattr(torch.backends.mps, 'is_available', lambda: apple)
+    monkeypatch.setattr(mps._policy, '_TORCH_OK', True)
     monkeypatch.setenv('SEVENN_DISABLE_MPS', value)
     assert auto_device() == want
     # a deployed TorchScript model never goes to the Apple GPU by itself
     assert auto_device(apple_gpu=False) == ('cuda' if cuda else 'cpu')
+    # nor does any model with a PyTorch too old for it (before 2.6)
+    monkeypatch.setattr(mps._policy, '_TORCH_OK', False)
+    assert auto_device() == ('cuda' if cuda else 'cpu')
 
 
 @needs_mps
