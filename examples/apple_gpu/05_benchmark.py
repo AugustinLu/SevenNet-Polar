@@ -49,8 +49,12 @@ ap.add_argument('--ckpt', required=True)
 ap.add_argument('--repeat', type=int, default=2)
 ap.add_argument('--efield', type=float, nargs=3, default=[0.0, 0.0, 0.05])
 ap.add_argument('--n', type=int, default=20)
-ap.add_argument('--kernels', default='e3nn,fused', help='e3nn, fused or both')
+ap.add_argument(
+    '--kernels', default='e3nn,fused', help="e3nn, fused or 'e3nn,fused'"
+)
 args = ap.parse_args()
+if not set(args.kernels.split(',')) <= {'e3nn', 'fused'}:
+    ap.error("--kernels takes e3nn, fused or 'e3nn,fused'")
 here = os.path.dirname(os.path.abspath(__file__))
 res = {}
 for kernels in args.kernels.split(','):

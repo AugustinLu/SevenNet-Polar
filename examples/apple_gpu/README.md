@@ -29,7 +29,7 @@ lists; moving it away (`model.to('cpu')`) undoes it. The model object is changed
 
 The 0.3 options (`mps_opt`, `mps_edge_bucket`, `SEVENNET_MPS_OPT`, `--enable_mps`) are gone in 0.3.3.
 
-A model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP cannot move to the Apple GPU (error). The fused
+A model built with cuEquivariance, FlashTP or OpenEquivariance cannot move to the Apple GPU (error). The fused
 kernels need `torch.mps.compile_shader`, public from PyTorch 2.7; 0.3.3 is tested on PyTorch 2.14 and 2.15 (SevenNet-Polar
 0.3 on 2.10 to 2.15; on 2.7 to 2.9 it ran checkpoints, but a model on the GPU could not be deep-copied). PyTorch 2.6, or
 weights other than float32, run the reference code on the GPU with a warning. Before PyTorch 2.6 the GPU cannot run SevenNet at all (no `scatter_reduce` on MPS), so the move stops with an
@@ -93,7 +93,7 @@ pair_style  e3gnn
 pair_coeff  * * checkpoint.pth efield 0 0 0.05 Zr O
 ```
 
-On a Mac with an Apple GPU, `sevenn patch_lammps` installs this pair style (`SEVENN_DISABLE_MPS=1` keeps the NVIDIA one; `--enable_flash`, `--enable_oeq` and `--d3` need CUDA). Keep the Python environment that ran `patch_lammps`: LAMMPS runs SevenNet inside it, and it needs no libtorch link. `SEVENN_PYTHON` and `SEVENN_ROOT` override the environment and the SevenNet folder recorded in the build; with the plugin, `SEVENN_PYTHON` must use the same Python version as the build.
+On a Mac with an Apple GPU, `sevenn patch_lammps` installs this pair style in place of the TorchScript ones, also for a CPU build (`SEVENN_DISABLE_MPS=1` keeps the TorchScript pair styles, which take deployed `.pt` models; `--enable_flash`, `--enable_oeq` and `--d3` need CUDA). Keep the Python environment that ran `patch_lammps`: LAMMPS runs SevenNet inside it, and it needs no libtorch link. `SEVENN_PYTHON` and `SEVENN_ROOT` override the environment and the SevenNet folder recorded in the build; with the plugin, `SEVENN_PYTHON` must use the same Python version as the build.
 
 **Option 1, build LAMMPS (same steps as FlashTP, `lammps_torch` page of the docs):**
 

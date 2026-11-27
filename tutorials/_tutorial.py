@@ -102,6 +102,9 @@ def best_backend():
 def calculator(model, device, kernels, **kw):
     from sevenn.calculator import SevenNetCalculator
 
+    if kernels not in ('e3nn', 'fused'):
+        raise ValueError(f"kernels must be 'e3nn' or 'fused', got {kernels!r}")
+
     if device == 'cpu':
         return SevenNetCalculator(model, device='cpu', **kw)
     # the reference e3nn code on the Apple GPU is the opt-out SEVENN_DISABLE_MPS=1

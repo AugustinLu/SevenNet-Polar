@@ -38,7 +38,7 @@ float32 stay float32. A model instance given to the calculator is changed in pla
 | `device='mps'` and `SEVENN_DISABLE_MPS=1` | Apple GPU, reference e3nn code, no padding |
 | `device='auto'`, no CUDA | Apple GPU if this PyTorch can run on it (2.6 or later), else CPU; CPU with `SEVENN_DISABLE_MPS=1`, and for a deployed TorchScript model |
 | `device='auto'`, CUDA available | CUDA |
-| model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP, moved to `mps` | error |
+| model built with cuEquivariance, FlashTP or OpenEquivariance, moved to `mps` | error |
 
 `SEVENN_DISABLE_MPS` accepts `1`, `true` or `yes`. Modules the kernels do not cover keep the
 e3nn code on the GPU with a warning; nothing moves to the CPU, unless `PYTORCH_ENABLE_MPS_FALLBACK=1`
@@ -51,8 +51,9 @@ Python and loads the checkpoint itself: there is no `sevenn get_model` step. It 
 (one MPI rank) and takes `pair_style e3gnn` with
 `pair_coeff * * checkpoint.pth [modal NAME] element1 element2 ...`.
 
-Patched build: on a Mac with an Apple GPU, `sevenn patch_lammps` installs this pair style
-(`SEVENN_DISABLE_MPS=1` keeps the CUDA one). The binary uses the Python environment that ran
+Patched build: on a Mac with an Apple GPU, `sevenn patch_lammps` installs this pair style in
+place of the TorchScript ones, also for a CPU build (`SEVENN_DISABLE_MPS=1` keeps the TorchScript
+pair styles, which take deployed `.pt` models). The binary uses the Python environment that ran
 the patch.
 
 ```bash

@@ -30,8 +30,7 @@ def watch():
         peak[0] = max(peak[0], r + d); peak[1] = max(peak[1], d)
         time.sleep(0.01)
 threading.Thread(target=watch, daemon=True).start()
-if {kernels!r} == 'e3nn':
-    os.environ['SEVENN_DISABLE_MPS'] = '1'
+os.environ['SEVENN_DISABLE_MPS'] = '1' if {kernels!r} == 'e3nn' else ''
 calc = SevenNetCalculator({ckpt!r}, device='mps')
 at = structure({k})
 at.calc = calc
@@ -93,11 +92,9 @@ print(
     f'peak {predicted:.1f} GB (budget {args.limit_gb:.1f} GB)'
 )
 print(f'largest size within the budget, 1 GB margin: about {fits} atoms (rough)')
-# PyTorch's default low watermark (1.4) is invalid below a high one of 1.4
-os.environ.setdefault(
-    'PYTORCH_MPS_LOW_WATERMARK_RATIO',
-    f"{0.6 * float(os.environ.get('PYTORCH_MPS_HIGH_WATERMARK_RATIO', '1.7')):.2f}",
-)
+# valid MPS watermarks before torch starts (PyTorch refuses low above high)
+sys.path.insert(0, here)
+import _common  # noqa: E402,F401
 import torch  # noqa: E402
 
 rec = (

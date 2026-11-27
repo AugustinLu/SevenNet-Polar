@@ -4,6 +4,7 @@ where no Apple GPU exists: a skip is not a pass."""
 import os
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -501,7 +502,9 @@ def test_fused_linear_with_bias_and_gradients():
 
 
 @needs_mps
-def test_fused_gate_tables_and_gradients():
+@pytest.mark.parametrize('scale', [1.0, 100.0])
+def test_fused_gate_tables_and_gradients(scale):
+    # scale 100: exp and tanh of large arguments stay finite in the Metal kernels
     from sevenn.mps import modules as mps_opt
 
     gate = Gate(
@@ -511,17 +514,17 @@ def test_fused_gate_tables_and_gradients():
         [torch.nn.functional.silu, torch.tanh],
         '2x1o+2x2e',
     ).to('mps')
-    x = torch.randn(6, gate.irreps_in.dim, device='mps', requires_grad=True)
+    x = (torch.randn(6, gate.irreps_in.dim, device='mps') * scale).requires_grad_()
     ref = gate(x)
     gref = torch.autograd.grad(ref.pow(2).sum(), x)[0]
     gate._tables = mps_opt._gate_tables(gate, 'mps')
     gate.__class__ = mps_opt.FusedGate
     out = gate(x)
-    assert float((ref - out).abs().max()) < 1e-6
-    assert (
-        float((gref - torch.autograd.grad(out.pow(2).sum(), x)[0]).abs().max())
-        < 1e-5
-    )
+    gout = torch.autograd.grad(out.pow(2).sum(), x)[0]
+    assert bool(torch.isfinite(out).all()) and bool(torch.isfinite(gout).all())
+    assert float((ref - out).abs().max()) < 1e-6 * max(float(ref.abs().max()), 1.0)
+    tol = 1e-5 * max(float(gref.abs().max()), 1.0)
+    assert float((gref - gout).abs().max()) < tol
 
 
 @needs_mps
@@ -715,10 +718,10 @@ def test_train_mode_has_second_derivatives_also_with_unequal_channels():
             )[0]
             w = next(p for p in m.parameters() if p.requires_grad and p.dim() > 1)
             g.append(torch.autograd.grad(v.sum(), w, allow_unused=True)[0])
-        if g[0] is not None:
-            assert float((g[0] - g[1]).abs().max()) < 1e-4 * max(
-                float(g[0].abs().max()), 1e-3
-            )
+        assert g[0] is not None and g[1] is not None
+        assert float((g[0] - g[1]).abs().max()) < 1e-4 * max(
+            float(g[0].abs().max()), 1e-3
+        )
 
 
 @needs_mps
@@ -1072,17 +1075,32 @@ def test_no_padding_with_a_convolution_left_on_e3nn(monkeypatch):
 
 
 @needs_mps
-def test_autocast_never_reaches_the_kernels():
+def test_autocast_never_reaches_the_kernels(monkeypatch):
+    from sevenn.mps import kernels
+
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     at.rattle(0.05, seed=2)
     calc = _calc(_build(_config()))
     at.calc = calc
+    calls = []
+    for name in ('_UvuFwd', 'CsrApply', 'GateApply'):
+        fn = getattr(kernels, name)
+        monkeypatch.setattr(
+            fn, 'apply', lambda *a, _n=name, _f=fn.apply: calls.append(_n) or _f(*a)
+        )
+    real_pad = mps_runtime.pad
+    monkeypatch.setattr(
+        mps_runtime, 'pad', lambda *a, **k: calls.append('pad') or real_pad(*a, **k)
+    )
+    forces = None
     with torch.autocast(device_type='mps', dtype=torch.float16):
         try:
             forces = at.get_forces()
         except RuntimeError:
-            return  # as the e3nn code does
-    assert np.isfinite(forces).all()
+            pass  # as the e3nn code does
+    assert calls == []  # neither the kernels nor the padding, whatever the outcome
+    if forces is not None:
+        assert np.isfinite(forces).all()
 
 
 def _fused_convolution():
@@ -1727,7 +1745,7 @@ def test_auto_and_explicit_devices_on_a_mac(monkeypatch):
     assert not calc.model._forward_pre_hooks
 
 
-# ---- LAMMPS pair style: tests from the upstream PR ----
+# ---- PyTorch CPU fallback ----
 
 
 @needs_mps
@@ -1737,7 +1755,7 @@ def test_cpu_fallback_of_pytorch_is_warned_about(monkeypatch):
         _build(_config()).to('mps')
 
 
-# ---- lifecycle edge cases (found in review)
+# ---- lifecycle edge cases: failed moves, no_grad, float64, retried graphs ----
 
 
 @needs_mps
@@ -1746,6 +1764,22 @@ def test_a_float64_model_moves_in_float32():
     model.to('mps')
     assert all(p.dtype == torch.float32 for p in model.parameters())
     assert _fused(model)
+
+
+@needs_mps
+def test_a_float64_default_dtype_still_fuses_every_module():
+    old = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float64)
+    try:
+        model = _build(_config())
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')  # no module may keep the e3nn code
+            model.to('mps')
+        assert all(p.dtype == torch.float32 for p in model.parameters())
+        rep = mps.report(model)
+        assert rep and not any(v for k, v in rep.items() if k.endswith('_e3nn'))
+    finally:
+        torch.set_default_dtype(old)
 
 
 @needs_mps

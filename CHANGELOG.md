@@ -20,18 +20,20 @@ documentation of field MD and of the Apple GPU limits. The optimizations planned
 - **Removed:** `SEVENNET_MPS_OPT`, `mps_opt` and `mps_edge_bucket` of `SevenNetCalculator`,
   `--enable_mps` of `sevenn train`, `sevenn inference` and `sevenn patch_lammps`, and the modules
   `sevenn.lammps_pair` and `sevenn.lammps_external` (now `sevenn.mps.lammps.pair` and
-  `.external`). Use the device and `SEVENN_DISABLE_MPS` instead. A LAMMPS built with 0.3 must be
-  patched and built again.
+  `.external`), `sevenn.nn.mps_opt` and `sevenn.nn.mps_fused` (now `sevenn.mps`) with the
+  calculator's `mps_runtime` (`sevenn.mps.report(model)` counts the fused modules). Use the device
+  and `SEVENN_DISABLE_MPS` instead. A LAMMPS built with 0.3 must be patched and built again.
 - **`sevenn patch_lammps` detects the Apple GPU**: on a Mac with an Apple GPU that this PyTorch can
-  run on, and no CUDA, it installs the Apple GPU pair style. The plugin sources moved
-  to `sevenn/mps/lammps/src/`.
+  run on, and no CUDA, it installs the Apple GPU pair style in place of the TorchScript ones (also
+  for a CPU build; `SEVENN_DISABLE_MPS=1` keeps those). The plugin sources moved to
+  `sevenn/mps/lammps/src/`.
 - **Safeguards from the upstream pull request (MDIL-SNU/SevenNet#340):** 32-bit index checks in
   the linear and gate kernels; no kernel launch on an empty graph; a convolution whose generated
   shader does not compile keeps the e3nn code; no padding under autocast; the LAMMPS pair style
   refuses `neigh_modify include` and `pair_style hybrid`, returns at once with no local atoms, and
   checks every Python object it uses; `build_plugin.sh` says when libpython is missing; the
   `fix external` bridge checks the shapes of the calculator's results. A model built with
-  cuEquivariance, FlashTP, OpenEquivariance or LunaTP is refused on the Apple GPU with an error.
+  cuEquivariance, FlashTP or OpenEquivariance is refused on the Apple GPU with an error.
 
 ### Fixed
 - `sevenn get_model` wrote `chemical_symbols_to_index` in the key order of the type map, but the

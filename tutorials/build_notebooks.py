@@ -99,10 +99,11 @@ plt.tight_layout()
 plt.show()"""),
     M("""On an Apple GPU you should see:
 
-* moving the reference code to the GPU helps little, or not at all, at this size: it runs many
-  small operations, each writing a large temporary array, and is limited by memory traffic;
-* the fused kernels compute each convolution in one pass without those arrays, and are an order of
-  magnitude faster.
+* moving the reference code to the GPU helps only a little at this size (about 2x on an M5 Pro; on a
+  smaller Apple GPU it can be slower than the CPU): it runs many small operations, each writing a
+  large temporary array, and is limited by memory traffic;
+* the fused kernels compute each convolution in one pass without those arrays: several times faster
+  than the reference code on the GPU, and about ten times faster than the CPU.
 
 The answer is the same in all three cases. What changes is how large a system, and how long a
 simulation, are practical: the next notebook runs molecular dynamics.
@@ -350,7 +351,7 @@ For production work on a given material, fine-tuning on a few DFT structures of 
 most of the softening.
 
 **Next experiments:** compare the time of the force step on the CPU (`T.calculator('7net-0', 'cpu',
-'off')`); a lower-symmetry crystal needs many more displaced supercells, where the speed matters more."""),
+'e3nn')`); a lower-symmetry crystal needs many more displaced supercells, where the speed matters more."""),
 ]
 
 # --------------------------------------------------------------------------------------------- 04

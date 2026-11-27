@@ -58,7 +58,7 @@ def _matrix_triplets(fn, ni: int, batch: int = 2048):
     with torch.no_grad():
         for s in range(0, ni, batch):
             k = min(batch, ni - s)
-            x = torch.zeros(k, ni)
+            x = torch.zeros(k, ni, dtype=torch.float32)
             x[torch.arange(k), s + torch.arange(k)] = 1.0
             r = fn(x).numpy()
             i, o = np.nonzero(r)
@@ -239,7 +239,8 @@ class FusedLinear(_DerivedTables, Linear):
         trip = _matrix_triplets(
             lambda x: ref(x, None, torch.zeros_like(ref.bias)), ref.irreps_in.dim
         )
-        bias = ref(torch.zeros(1, ref.irreps_in.dim))[0].detach().numpy()
+        zero = torch.zeros(1, ref.irreps_in.dim, dtype=torch.float32)
+        bias = ref(zero)[0].detach().numpy()
         self._map = CsrMap(
             [trip], bias, ref.irreps_in.dim, ref.irreps_out.dim, self.weight.device
         )
@@ -318,9 +319,9 @@ def _selfconn_triplets(ref: FullyConnectedTensorProduct) -> List:
         if ins.connection_mode != 'uvw' or W.shape[1] != nt:
             raise NotImplementedError(f'self-connection instruction {ins}')
         d = ref.irreps_in1[ins.i_in1].ir.dim
-        x = torch.zeros(1, ni)
+        x = torch.zeros(1, ni, dtype=torch.float32)
         x[0, sl1[ins.i_in1].start] = 1.0
-        z = torch.zeros(1, nt)
+        z = torch.zeros(1, nt, dtype=torch.float32)
         z[0, 0] = 1.0
         with torch.no_grad():
             c = float(
@@ -364,10 +365,10 @@ class FusedSelfConnection(_DerivedTables, FullyConnectedTensorProduct):
         trips = _selfconn_triplets(ref)
         # the matrices must reproduce the module
         x = torch.randn(
-            3, ni, generator=torch.Generator().manual_seed(0)
+            3, ni, dtype=torch.float32, generator=torch.Generator().manual_seed(0)
         )  # leaves the global generator alone
         for t in {0, nt // 2, nt - 1}:
-            z = torch.zeros(3, nt)
+            z = torch.zeros(3, nt, dtype=torch.float32)
             z[:, t] = 1.0
             r = np.zeros((3, no))
             np.add.at(r.T, trips[t][1], (x[:, trips[t][0]].numpy() * trips[t][2]).T)
@@ -575,18 +576,19 @@ def _gate_tables(gate: Gate, device) -> GateTables:
             cst.append(k)
         if len(gated):
             ng, nk = len(gated), len(gates)
+            f32 = dict(dtype=torch.float32, device=device)  # not the default dtype
             # elementwise product: which gated slot and gate feed each output slot,
             # and its numeric factor
             to_gated = (
                 gate.mul(
-                    torch.eye(ng, device=device), torch.ones(ng, nk, device=device)
+                    torch.eye(ng, **f32), torch.ones(ng, nk, **f32)
                 )
                 .cpu()
                 .numpy()
             )
             to_gate = (
                 gate.mul(
-                    torch.ones(nk, ng, device=device), torch.eye(nk, device=device)
+                    torch.ones(nk, ng, **f32), torch.eye(nk, **f32)
                 )
                 .cpu()
                 .numpy()
