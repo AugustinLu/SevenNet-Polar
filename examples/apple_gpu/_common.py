@@ -1,13 +1,18 @@
 """Shared by the examples. Sets the MPS memory cap before torch is imported: 0.25 of
-the recommended working set is about 10 GB on a 48 GB Mac. Keep the ratio above 0: 0
-disables PyTorch's safeguard against exhausting the machine's memory."""
+the recommended working set is about 10 GB on a 48 GB Mac, but about 1.4 GB on an
+8 GB one, so set PYTORCH_MPS_HIGH_WATERMARK_RATIO higher there (0.6, for example).
+Keep the ratio above 0: 0 disables PyTorch's safeguard against exhausting the
+machine's memory. The low watermark must not exceed the high one."""
 
 import argparse
 import os
 import resource
 
 os.environ.setdefault('PYTORCH_MPS_HIGH_WATERMARK_RATIO', '0.25')
-os.environ.setdefault('PYTORCH_MPS_LOW_WATERMARK_RATIO', '0.15')
+os.environ.setdefault(
+    'PYTORCH_MPS_LOW_WATERMARK_RATIO',
+    f"{0.6 * float(os.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO']):.2f}",
+)
 
 import torch  # noqa: E402
 from ase.io import read  # noqa: E402
@@ -31,10 +36,10 @@ def parser(doc):
         help='supercell of the 12-atom cell, 2 gives 96 atoms',
     )
     ap.add_argument(
-        '--mps-opt',
+        '--kernels',
         default='fused',
-        choices=['fused', 'off'],
-        help="'off' runs the reference e3nn code (as SEVENN_DISABLE_MPS=1)",
+        choices=['fused', 'e3nn'],
+        help="'e3nn' runs the reference e3nn code (as SEVENN_DISABLE_MPS=1)",
     )
     ap.add_argument(
         '--efield',
@@ -56,7 +61,7 @@ def structure(repeat, rattle=0.05):
 
 
 def calculators(args):
-    if args.mps_opt == 'off':
+    if args.kernels == 'e3nn':
         os.environ['SEVENN_DISABLE_MPS'] = '1'
     base = SevenNetCalculator(args.ckpt, device='mps')
     calc = FieldCalculator(base, enforce_asr=True)

@@ -17,10 +17,9 @@ import sys
 
 MEASURE = """
 import json, os, sys, threading, time
-os.environ.setdefault('PYTORCH_MPS_HIGH_WATERMARK_RATIO', '0.25')
-import psutil, torch
 sys.path.insert(0, {here!r})
-from _common import structure
+from _common import structure  # sets the MPS watermarks before torch starts
+import psutil, torch
 from sevenn.calculator import SevenNetCalculator
 peak = [0.0, 0.0]
 stop = []
@@ -31,7 +30,7 @@ def watch():
         peak[0] = max(peak[0], r + d); peak[1] = max(peak[1], d)
         time.sleep(0.01)
 threading.Thread(target=watch, daemon=True).start()
-if {mode!r} == 'off':
+if {kernels!r} == 'e3nn':
     os.environ['SEVENN_DISABLE_MPS'] = '1'
 calc = SevenNetCalculator({ckpt!r}, device='mps')
 at = structure({k})
@@ -56,7 +55,7 @@ ap.add_argument(
     default=14.0,
     help='budget for RSS + Metal driver memory',
 )
-ap.add_argument('--mps-opt', default='fused', choices=['fused', 'off'])
+ap.add_argument('--kernels', default='fused', choices=['fused', 'e3nn'])
 ap.add_argument(
     '--cells', type=int, nargs=2, default=[3, 4], help='supercells to measure'
 )
@@ -64,7 +63,7 @@ args = ap.parse_args()
 here = os.path.dirname(os.path.abspath(__file__))
 rows = []
 for k in args.cells:
-    code = MEASURE.format(here=here, ckpt=args.ckpt, mode=args.mps_opt, k=k)
+    code = MEASURE.format(here=here, ckpt=args.ckpt, kernels=args.kernels, k=k)
     out = subprocess.run(
         [sys.executable, '-c', code], capture_output=True, text=True, timeout=1200
     )
@@ -94,6 +93,11 @@ print(
     f'peak {predicted:.1f} GB (budget {args.limit_gb:.1f} GB)'
 )
 print(f'largest size within the budget, 1 GB margin: about {fits} atoms (rough)')
+# PyTorch's default low watermark (1.4) is invalid below a high one of 1.4
+os.environ.setdefault(
+    'PYTORCH_MPS_LOW_WATERMARK_RATIO',
+    f"{0.6 * float(os.environ.get('PYTORCH_MPS_HIGH_WATERMARK_RATIO', '1.7')):.2f}",
+)
 import torch  # noqa: E402
 
 rec = (

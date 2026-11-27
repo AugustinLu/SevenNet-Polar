@@ -6,7 +6,9 @@ GPU sees few tensor shapes. Nothing else changes in the inputs or the commands.
 
 ## Requirements
 
-- macOS on Apple silicon, PyTorch 2.7 or later (2.6 runs the reference e3nn code on the GPU).
+- macOS on Apple silicon, PyTorch 2.7 or later (2.6 runs the reference e3nn code on the GPU). This release is
+  tested on PyTorch 2.14 and 2.15; SevenNet-Polar 0.3 was tested on 2.10 to 2.15, and on 2.7 to 2.9 it ran
+  checkpoints, but a model on the GPU could not be deep-copied.
 - float32: MPS has no float64. Shift and scale stored in float64 are converted when the model
   moves to the GPU, so results agree with the CPU to float32 precision, not bit for bit.
 

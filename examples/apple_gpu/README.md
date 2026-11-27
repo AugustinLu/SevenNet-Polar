@@ -22,16 +22,17 @@ lists; moving it away (`model.to('cpu')`) undoes it. The model object is changed
 |---|---|
 | `device='mps'` | fused Metal kernels, edge padding |
 | `device='mps'` with the environment variable `SEVENN_DISABLE_MPS=1` | the reference e3nn code, unchanged, on the GPU (float32) |
-| `device='auto'` | CUDA if available, else the Apple GPU (the CPU with `SEVENN_DISABLE_MPS=1`) |
+| `device='auto'` | CUDA if available, else the Apple GPU if this PyTorch can run on it, else the CPU; the CPU also with `SEVENN_DISABLE_MPS=1` and for a deployed TorchScript model |
 | `device='cpu'` or `'cuda'` | nothing changes; the Apple code is not imported |
 | `sevenn inference --device mps ...` | evaluates a dataset with the fused kernels; batches padded to 256 edges |
 | `device: mps` under `train` in the YAML, `Trainer(..., device='mps')` | training on the fused kernels |
 
 The 0.3 options (`mps_opt`, `mps_edge_bucket`, `SEVENNET_MPS_OPT`, `--enable_mps`) are gone in 0.3.3.
 
-A model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP cannot move to the Apple GPU (error). A PyTorch
-without `torch.mps.compile_shader` (2.6), or weights other than float32, run the reference code on the GPU with a
-warning. Before PyTorch 2.6 the GPU cannot run SevenNet at all (no `scatter_reduce` on MPS), so the move stops with an
+A model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP cannot move to the Apple GPU (error). The fused
+kernels need `torch.mps.compile_shader`, public from PyTorch 2.7; 0.3.3 is tested on PyTorch 2.14 and 2.15 (SevenNet-Polar
+0.3 on 2.10 to 2.15; on 2.7 to 2.9 it ran checkpoints, but a model on the GPU could not be deep-copied). PyTorch 2.6, or
+weights other than float32, run the reference code on the GPU with a warning. Before PyTorch 2.6 the GPU cannot run SevenNet at all (no `scatter_reduce` on MPS), so the move stops with an
 error. A module the kernels do not cover (a uvu path whose input and output multiplicities differ, a gate activation
 other than silu and tanh, a non-one-hot self-connection operand) keeps the e3nn code on the GPU, with a warning;
 `report(model)` counts them. Nothing moves to the CPU. Leave `PYTORCH_ENABLE_MPS_FALLBACK` unset: SevenNet does not
@@ -53,18 +54,22 @@ each derivative of the backward pass is one of the same three kernels with an in
 call each other, they give derivatives to any order and keep only their inputs, as FlashTP does on NVIDIA. Linear and
 self-connection layers rebuild their matrix from the live weights at each call and run one matrix product, and the gate is a
 few elementwise operations, so autograd differentiates them to any order too. Their tables are built at the first call in
-train mode (16 s and 4 GB in all for 7net-omni at 96 atoms). `Trainer` on `device='mps'` switches this on;
+train mode (16 s and 4 GB in all for 7net-omni at 96 atoms, measured with 0.3). `Trainer` on `device='mps'` switches this on;
 `SEVENN_DISABLE_MPS=1` keeps e3nn.
 
 | model, batch | e3nn: step, memory kept for backward | fused: step, memory kept |
 |---|---|---|
-| SevenNet-PM-S, 4 × 96 atoms | 2,660 ms, 5.56 GB | 119 ms, 1.24 GB |
-| SevenNet-PM-M, 4 × 12 atoms | 2,640 ms, 3.91 GB | 154 ms, 0.70 GB |
-| 7net-0, 4 × 96 atoms | 1,400 ms, 3.70 GB | 99 ms, 0.93 GB |
-| 7net-l3i5, 2 × 96 atoms | 2,110 ms, 4.13 GB | 100 ms, 0.69 GB |
+| SevenNet-PM-S, 4 × 96 atoms | 2,530 ms, 5.56 GB | 113 ms, 1.25 GB |
+| SevenNet-PM-M, 4 × 12 atoms | 2,590 ms, 3.91 GB | 148 ms, 0.71 GB |
+| 7net-0, 4 × 96 atoms | 1,370 ms, 3.70 GB | 90 ms, 0.93 GB |
+| 7net-l3i5, 2 × 96 atoms | 2,050 ms, 4.12 GB | 92 ms, 0.69 GB |
 
-M5 Pro, plugged in, one repeated batch (Adam with learning rate 0, so the inputs stay fixed); gradients equal to e3nn within 1.4e-6 relative. Through `Trainer`, a 7net-0 fine-tune epoch of 8 structures
-takes 0.24 s against 2.9 s.
+SevenNet-Polar 0.3.3, PyTorch 2.14.1, M5 Pro, plugged in; one repeated batch of rattled ZrO2 cells (Adam with
+learning rate 0, so the inputs stay fixed), median of six steps after three; the reference code through
+`SEVENN_DISABLE_MPS=1`. Gradients equal to e3nn within 1.4e-6 relative, forces within 7.2e-6 eV/Å. Without a cap on
+the MPS allocator, the e3nn run of SevenNet-PM-S passed 20 GB of process footprint, the limit of these runs; it was
+measured with `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.3`. Through `Trainer`, a 7net-0 fine-tune epoch of 8 structures took 0.24 s
+against 2.9 s (measured with 0.3).
 
 Batches are padded to a multiple of 256 edges in training and `sevenn inference`, so the GPU
 sees few tensor shapes: PyTorch compiles and keeps a graph for every new shape, and memory
@@ -76,8 +81,8 @@ too, which PyTorch also keeps, so check the memory of a first epoch there.
 Training on a small dataset: keep `num_workers: 0` (the default). On macOS each
 DataLoader worker is a new process that imports torch, e3nn and SevenNet, about 3 s,
 and the workers start again for every epoch. On the Polar example (30 ZrO₂ frames,
-one per batch) an epoch takes 7.6 s with 4 workers and 1.2 s without on the Apple
-GPU, against 11 s on the CPU.
+one per batch) an epoch took 7.6 s with 4 workers and 1.2 s without on the Apple
+GPU, against 11 s on the CPU (measured with 0.3).
 
 ## LAMMPS with `lmp -in`
 
@@ -111,13 +116,15 @@ cd lammps_sevenn && mkdir build && cd build && cmake ../cmake -DBUILD_MPI=no -DB
 **Option 2, no build, with `pip install lammps mpich`:** the same pair style as a plugin.
 
 ```bash
-SRC=$(python -c "import sevenn.mps.lammps.patch as p; print(p.SRC)")
-bash $SRC/build_plugin.sh python
+SRC="$(python -c "import sevenn.mps.lammps.patch as p; print(p.SRC)")"
+bash "$SRC/build_plugin.sh" python
 ```
 
 ```bash
-export LAMMPS_PLUGIN_PATH=$SRC
+export LAMMPS_PLUGIN_PATH="$SRC"
 ```
+
+The plugin is built next to its sources, so the installed package must be writable.
 
 Then `lmp -in` as above. `06_lammps_serial.py` (`fix external`, no compiler at all) stays for scripts that drive LAMMPS from Python.
 
@@ -129,7 +136,8 @@ It needs `units metal` and one MPI rank, and stops with an error otherwise. So d
 
 ## Examples
 
-All take `--ckpt` (a SevenNet or SevenNet-Polar Direct checkpoint; `SevenNet-PM-S.pth` from the SevenNet-Polar models on Zenodo, doi:10.5281/zenodo.23734482, is used below). Examples for ZrO2 with 96 atoms use `--repeat 2` (the default):
+All take `--ckpt` (a SevenNet or SevenNet-Polar Direct checkpoint; `SevenNet-PM-S.pth` from the SevenNet-Polar models on Zenodo, doi:10.5281/zenodo.23734482, is used below). Examples for ZrO2 with 96 atoms use `--repeat 2` (the default). `--kernels e3nn` runs the reference
+e3nn code on the GPU instead of the fused kernels (as `SEVENN_DISABLE_MPS=1`); `05_benchmark.py` runs both:
 
 ```bash
 python 01_single_point.py --ckpt SevenNet-PM-S.pth
@@ -174,6 +182,8 @@ Serial only. It runs as `python 06_lammps_serial.py`, not `lmp -in`. A deployed 
 
 ## Memory
 
-`_common.py` caps the MPS allocator through `PYTORCH_MPS_HIGH_WATERMARK_RATIO` before torch is imported. `04_plan_memory.py` predicts the
+`_common.py` caps the MPS allocator through `PYTORCH_MPS_HIGH_WATERMARK_RATIO` before torch is imported: 0.25 of the
+recommended working set, about 10 GB on a 48 GB Mac but about 1.4 GB on an 8 GB one, where the reference e3nn code of
+SevenNet-PM-S at 96 atoms already needs more; set `PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.6` there. `04_plan_memory.py` predicts the
 peak for a target size from two short runs. Never set the ratio to 0: this disables PyTorch's guard against exhausting the machine's memory.
 Unified memory is shared with everything else on the Mac, so count process RSS and `torch.mps.driver_allocated_memory()` together.

@@ -29,10 +29,10 @@ CACHE = Path(
 )
 HERE = Path(__file__).resolve().parent
 
-# (label, device, mps_opt): the three ways to run the same model
+# (label, device, kernels): the three ways to run the same model
 BACKENDS = [
-    ('CPU, e3nn', 'cpu', 'off'),
-    ('Apple GPU, e3nn', 'mps', 'off'),
+    ('CPU, e3nn', 'cpu', 'e3nn'),
+    ('Apple GPU, e3nn', 'mps', 'e3nn'),
     ('Apple GPU, fused', 'mps', 'fused'),
 ]
 
@@ -95,18 +95,18 @@ def available_backends():
 
 
 def best_backend():
-    """The fastest available (label, device, mps_opt)."""
+    """The fastest available (label, device, kernels)."""
     return available_backends()[-1]
 
 
-def calculator(model, device, mps_opt, **kw):
+def calculator(model, device, kernels, **kw):
     from sevenn.calculator import SevenNetCalculator
 
     if device == 'cpu':
         return SevenNetCalculator(model, device='cpu', **kw)
     # the reference e3nn code on the Apple GPU is the opt-out SEVENN_DISABLE_MPS=1
     old = os.environ.get('SEVENN_DISABLE_MPS')
-    os.environ['SEVENN_DISABLE_MPS'] = '1' if mps_opt == 'off' else ''
+    os.environ['SEVENN_DISABLE_MPS'] = '1' if kernels == 'e3nn' else ''
     try:
         return SevenNetCalculator(model, device=device, **kw)
     finally:

@@ -48,13 +48,13 @@ atoms.rattle(0.03, seed=1)
 print(len(atoms), 'atoms, cell', atoms.cell.lengths())"""),
     M("""## Energy, forces and stress with each backend
 
-`T.calculator(model, device, mps_opt)` builds a `SevenNetCalculator`. In your own scripts this is simply
+`T.calculator(model, device, kernels)` builds a `SevenNetCalculator`. In your own scripts this is simply
 `SevenNetCalculator('7net-0', device='mps')`, which uses the fused kernels; the environment variable
 `SEVENN_DISABLE_MPS=1` keeps the reference e3nn code."""),
     C("""results, calcs = {}, {}
-for label, device, opt in T.available_backends():
+for label, device, kernels in T.available_backends():
     t = time.perf_counter()
-    calc = T.calculator('7net-0', device, opt)
+    calc = T.calculator('7net-0', device, kernels)
     a = atoms.copy()
     a.calc = calc
     results[label] = dict(E=a.get_potential_energy(), F=a.get_forces(), S=a.get_stress())
@@ -159,16 +159,16 @@ def ns_per_day(sps, dt_fs=1.0):
 replace."""),
     C("""small = silicon(2)
 speed = {}
-for label, device, opt in T.available_backends():
-    sps, _, _ = run_md(small, T.calculator('7net-0', device, opt), device, steps=20)
+for label, device, kernels in T.available_backends():
+    sps, _, _ = run_md(small, T.calculator('7net-0', device, kernels), device, steps=20)
     speed[label] = sps
     print(f'{label:18s} {sps:6.1f} steps/s  = {ns_per_day(sps):5.2f} ns/day')"""),
     M("""## Larger cells with the fused kernels
 
 The cost grows with the number of atoms (more precisely, with the number of neighbor pairs). Cells
 that would not fit in memory on this machine are skipped."""),
-    C("""label, device, opt = T.best_backend()
-calc = T.calculator('7net-0', device, opt)
+    C("""label, device, kernels = T.best_backend()
+calc = T.calculator('7net-0', device, kernels)
 sizes = T.cells_for_memory([2, 3, 4, 5], gb_per_1000_atoms=1.5, natoms=[64, 216, 512, 1000])
 scan = []
 for n in sizes:
@@ -271,8 +271,8 @@ This notebook needs `phonopy` (`pip install phonopy`)."""),
 from ase.filters import FrechetCellFilter
 from ase.optimize import BFGS
 
-label, device, opt = T.best_backend()
-calc = T.calculator('7net-0', device, opt)
+label, device, kernels = T.best_backend()
+calc = T.calculator('7net-0', device, kernels)
 
 unit = bulk('Si', 'diamond', a=5.40, cubic=True)      # start a little off the equilibrium lattice
 unit.calc = calc
@@ -325,7 +325,7 @@ backend gives the same forces. Universal potentials trained mostly on structures
 known to soften phonons. Larger and more recently trained models do better, which we can check in a
 minute, since each phonon calculation takes seconds."""),
     C("""def gamma_optical(model, **kw):
-    c = T.calculator(model, device, opt, **kw)
+    c = T.calculator(model, device, kernels, **kw)
     u = bulk('Si', 'diamond', a=5.40, cubic=True)
     u.calc = c
     BFGS(FrechetCellFilter(u), logfile=None).run(fmax=1e-4, steps=200)
@@ -383,8 +383,8 @@ ps_s = T.zenodo_file('SevenNet-PS-S.pth')
 frames = read(T.HERE / 'data' / 'zro2_li3po4_sample.extxyz', index=':')
 print(len(frames), 'frames:', sorted({a.get_chemical_formula(mode='reduce') for a in frames}))"""),
     M("""## Predict Z\\* and compare with DFT"""),
-    C("""label, device, opt = T.best_backend()
-models = {'PM-S': T.calculator(pm_s, device, opt), 'PS-S': T.calculator(ps_s, device, opt)}
+    C("""label, device, kernels = T.best_backend()
+models = {'PM-S': T.calculator(pm_s, device, kernels), 'PS-S': T.calculator(ps_s, device, kernels)}
 pred = {k: [] for k in models}
 dft = []
 t = time.perf_counter()
@@ -443,7 +443,7 @@ check the relation on one ZrO₂ cell, with the sum rule enforced (`enforce_asr=
     C("""from sevenn.calculator import FieldCalculator
 
 a = next(f for f in frames if set(f.get_chemical_symbols()) == {'Zr', 'O'}).copy()
-base = T.calculator(pm_s, device, opt)
+base = T.calculator(pm_s, device, kernels)
 field = FieldCalculator(base, enforce_asr=True)
 E = np.array([0.0, 0.0, 0.05])                          # V/Å
 a.calc = field

@@ -61,6 +61,10 @@ documentation of field MD and of the Apple GPU limits. The optimizations planned
   limit (about 493,000 edges for SevenNet-PM-M), and the scope of the 0.3.2 padding (only the edge
   count is padded; memory was measured flat on fixed-size data sets). The training table and the
   example commands use the public SevenNet-PM-S and PM-M checkpoints.
+- **Examples and tutorials follow the device switch:** the example scripts take `--kernels fused` or
+  `--kernels e3nn` (was `--mps-opt fused|off`), and the tutorials' helper `T.calculator(model,
+  device, kernels)`. The docs page, the examples and the tutorials give the same PyTorch versions
+  (2.7 or later for the fused kernels; this release tested on 2.14 and 2.15).
 
 ## [SevenNet-Polar 0.3.2] - 2026-11-13
 Bug fix for training and `sevenn inference` on the Apple GPU.
