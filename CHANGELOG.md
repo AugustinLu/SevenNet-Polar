@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## [SevenNet-Polar 0.3.3] - unreleased
+## [SevenNet-Polar 0.3.3] - 2026-11-27
 The Apple GPU code reorganized as upstream SevenNet asked for it (one subpackage, one entry point,
 no flags), a bug fix in the higher derivatives of the Apple GPU convolution, and clearer
 documentation of field MD and of the Apple GPU limits. The optimizations planned for 0.3.3 move to
