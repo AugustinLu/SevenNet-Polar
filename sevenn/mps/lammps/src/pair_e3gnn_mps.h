@@ -1,5 +1,5 @@
 /* Pair style e3gnn on the Apple GPU, see pair_e3gnn_mps.cpp.
-   Part of SevenNet-Polar, MIT license (see LICENSE). It is compiled against LAMMPS headers:
+   Part of SevenNet, MIT license (see LICENSE). It is compiled against LAMMPS headers:
    a LAMMPS build or plugin containing it is covered by the GPL of LAMMPS. */
 #ifdef PAIR_CLASS
 // clang-format off

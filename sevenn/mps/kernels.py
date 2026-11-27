@@ -17,8 +17,9 @@ derivatives only.
 
 The coefficients g are read off the e3nn module itself by probing it (see probe_cg),
 so every normalisation of e3nn is reproduced. Threads own their output row (node,
-channel) or edge; nothing is written by two threads, so the result is deterministic
-and needs no atomics.
+channel) or edge; nothing is written by two threads, so a kernel gives the same bits
+for the same inputs and edge order, and needs no atomics. The rest of the model runs
+PyTorch operations, which need not be bitwise reproducible on the GPU.
 
 """
 
@@ -30,6 +31,15 @@ import torch
 from e3nn import o3
 
 _libs: Dict[str, object] = {}
+
+
+def _check_int32(where: str, *sizes: int) -> None:
+    """The kernels index buffers with 32-bit integers."""
+    if max(sizes) >= 2**31:
+        raise RuntimeError(
+            f'{where}: graph too large for the fused kernels (32-bit indices); '
+            f'SEVENN_DISABLE_MPS=1 runs the reference e3nn code'
+        )
 
 
 def _check_inputs(where: str, *checks) -> None:
@@ -290,7 +300,7 @@ def _first_order_only():
             'fused Metal kernels of linear and gate layers have first derivatives '
             'only in eval mode. For second derivatives use train mode, whose '
             'PyTorch path for those layers has derivatives to any order, or '
-            "mps_opt='off'."
+            'SEVENN_DISABLE_MPS=1.'
         )
 
 
@@ -506,32 +516,22 @@ class FusedUvu(_UvuFwd):
     @staticmethod
     def forward(ctx, x, y, w, K: FusedTP, plan: EdgePlan):
         # the kernels index with 32-bit integers
-        if (
-            max(
-                plan.num_edges * max(K.mul * K.ny, K.nw),
-                plan.num_nodes * max(K.nx, K.nout),
-            )
-            >= 2**31
-        ):
-            raise RuntimeError(
-                'graph too large for the fused kernels (32-bit indices), use '
-                "mps_opt='off'"
-            )
+        _check_int32(
+            'convolution kernel',
+            plan.num_edges * max(K.mul * K.ny, K.nw),
+            plan.num_nodes * max(K.nx, K.nout),
+        )
         _check_inputs(
             'uvu kernel',
             (x, (plan.num_nodes, K.nx)),
             (y, (plan.num_edges, K.ny)),
             (w, (plan.num_edges, K.nw)),
         )
-        # the plan object may be rebuilt before a later backward
-        return _UvuFwd.forward(
-            ctx,
-            x.contiguous(),
-            y.contiguous(),
-            w.contiguous(),
-            K,
-            plan.__dict__.copy(),
-        )
+        # the plan object may be rebuilt before a later backward. The inputs are
+        # saved as given: a contiguous copy made here would not be connected to the
+        # caller's graph, and higher derivatives through it would be lost; the
+        # launches make their own contiguous copies.
+        return _UvuFwd.forward(ctx, x, y, w, K, plan.__dict__.copy())
 
 
 # ---- node level: a linear map with a block-sparse matrix, optionally one matrix per
@@ -612,6 +612,7 @@ class CsrMap:
 class CsrApply(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, M: CsrMap, types: Optional[torch.Tensor]):
+        _check_int32('linear kernel', x.shape[0] * max(M.ni, M.no))
         _check_inputs('linear kernel', (x, (x.shape[0], M.ni)))
         if M.nt > 1 and (
             types is None
@@ -628,9 +629,10 @@ class CsrApply(torch.autograd.Function):
         ctx.M, ctx.types = M, types if types is not None else M.notype
         x = x.contiguous()
         out = x.new_empty((x.shape[0], M.no))
-        _lib(_CSR_SHADER).csr_mm(
-            out, x, *M.fwd, M.bias, ctx.types, M.dfwd, threads=(M.no, x.shape[0])
-        )
+        if x.shape[0] > 0:  # no launch on an empty grid
+            _lib(_CSR_SHADER).csr_mm(
+                out, x, *M.fwd, M.bias, ctx.types, M.dfwd, threads=(M.no, x.shape[0])
+            )
         return out
 
     @staticmethod
@@ -639,15 +641,16 @@ class CsrApply(torch.autograd.Function):
         M = ctx.M
         obar = obar.contiguous()
         xbar = obar.new_empty((obar.shape[0], M.ni))
-        _lib(_CSR_SHADER).csr_mm(
-            xbar,
-            obar,
-            *M.adj,
-            M.zero,
-            ctx.types,
-            M.dadj,
-            threads=(M.ni, obar.shape[0]),
-        )
+        if obar.shape[0] > 0:
+            _lib(_CSR_SHADER).csr_mm(
+                xbar,
+                obar,
+                *M.adj,
+                M.zero,
+                ctx.types,
+                M.dadj,
+                threads=(M.ni, obar.shape[0]),
+            )
         return xbar, None, None
 
 
@@ -712,14 +715,16 @@ class GateTables:
 class GateApply(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, T: GateTables):
+        _check_int32('gate kernel', x.shape[0] * max(T.n_in, T.nout))
         _check_inputs('gate kernel', (x, (x.shape[0], T.n_in)))
         x = x.contiguous()
         ctx.save_for_backward(x)
         ctx.T = T
         out = x.new_empty((x.shape[0], T.nout))
-        _lib(_GATE_SHADER).gate_fwd(
-            out, x, *T.tables, T.dims, threads=(T.nout, x.shape[0])
-        )
+        if x.shape[0] > 0:  # no launch on an empty grid
+            _lib(_GATE_SHADER).gate_fwd(
+                out, x, *T.tables, T.dims, threads=(T.nout, x.shape[0])
+            )
         return out
 
     @staticmethod
@@ -728,7 +733,8 @@ class GateApply(torch.autograd.Function):
         (x,) = ctx.saved_tensors
         T = ctx.T
         xbar = x.new_empty(x.shape)
-        _lib(_GATE_SHADER).gate_adj(
-            xbar, obar.contiguous(), x, *T.tables, T.dims, threads=x.shape[0]
-        )
+        if x.shape[0] > 0:
+            _lib(_GATE_SHADER).gate_adj(
+                xbar, obar.contiguous(), x, *T.tables, T.dims, threads=x.shape[0]
+            )
         return xbar, None

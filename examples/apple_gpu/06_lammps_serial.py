@@ -12,7 +12,7 @@ import time
 from _common import HERE, calculators, parser, peak_memory_gb
 from lammps import lammps
 
-from sevenn.lammps_external import run_input
+from sevenn.mps.lammps.external import run_input
 
 ap = parser(__doc__)
 ap.add_argument('--input', default=os.path.join(HERE, 'in.md_external'))

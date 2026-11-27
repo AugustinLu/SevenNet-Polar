@@ -21,7 +21,8 @@ pip install jupyter phonopy
 jupyter lab tutorials/
 ```
 
-The fused kernels need PyTorch 2.10 or later on an Apple silicon Mac. Without them, the notebooks run
+The fused kernels need PyTorch 2.7 or later on an Apple silicon Mac (tested on 2.14 and 2.15; see the Apple GPU
+page of the docs). Without them, the notebooks run
 with the reference code and say so. The SevenNet-Polar models of notebook 4 are downloaded once from
 Zenodo ([doi:10.5281/zenodo.23734482](https://doi.org/10.5281/zenodo.23734482), CC-BY-4.0) into
 `~/.cache/sevennet-polar`; set `SEVENN_TUTORIAL_CACHE` to use another folder.

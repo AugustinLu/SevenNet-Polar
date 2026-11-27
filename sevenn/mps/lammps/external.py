@@ -1,9 +1,9 @@
 """Serial LAMMPS with a SevenNet calculator through `fix external`, driven from
-Python. For plain `lmp -in` on a Mac see pair_e3gnn_mps/.
+Python. For plain `lmp -in` on a Mac see the pair style in src/.
 
 LAMMPS runs the dynamics and the calculator gives energy, forces and virial at each
-step, so anything a calculator supports works, among them the Metal kernels and a
-field. In the input, replace the pair style by:
+step, so anything an ASE calculator supports works, among them the Metal kernels.
+In the input, replace the pair style by:
 
     pair_style   zero 6.0
     pair_coeff   * *
@@ -50,16 +50,21 @@ def attach(
             return
         try:
             energy, forces, virial = evaluate(nlocal, x)
+            forces = np.asarray(forces, dtype=np.float64)
+            if forces.shape != (nlocal, 3) or len(virial) != 6:
+                raise ValueError(
+                    f'the calculator gave forces of shape {forces.shape} and '
+                    f'{len(virial)} virial components for {nlocal} atoms'
+                )
+            # published only once all results exist and have the right shape
+            f[:nlocal] = forces
+            lmp.fix_external_set_energy_global(fix_id, energy)
+            lmp.fix_external_set_virial_global(fix_id, virial)
         except Exception as e:  # an exception would not reach LAMMPS
             failed.append((step, e))
             traceback.print_exc(file=sys.stderr)
             f[:nlocal] = np.full((nlocal, 3), np.nan)
             lmp.force_timeout()
-            return
-        # published only once all results exist
-        f[:nlocal] = forces
-        lmp.fix_external_set_energy_global(fix_id, energy)
-        lmp.fix_external_set_virial_global(fix_id, virial)
 
     def evaluate(nlocal, x):
         if nlocal == 0:  # all atoms lost, with thermo_modify lost ignore

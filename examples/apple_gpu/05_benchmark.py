@@ -1,5 +1,5 @@
 """Benchmark: model call on a fixed graph and ASE step with a changing graph,
-reference e3nn against fused kernels, one process per mode.
+reference e3nn against fused kernels, one process per kernel choice.
 
 The model call covers forward + all backward passes with the graph on the device. The
 ASE step covers the neighbour list, transfers, model and copies back, with new
@@ -23,7 +23,7 @@ import argparse
 import numpy as np, torch
 from sevenn.atom_graph_data import AtomGraphData
 from sevenn.train.dataload import unlabeled_atoms_to_graph
-args = argparse.Namespace(ckpt={ckpt!r}, mps_opt={mode!r}, efield={efield!r})
+args = argparse.Namespace(ckpt={ckpt!r}, kernels={kernels!r}, efield={efield!r})
 base, calc = calculators(args)
 at = structure({k})
 g = AtomGraphData.from_numpy_dict(unlabeled_atoms_to_graph(at, base.cutoff)); g.to('mps')
@@ -49,15 +49,19 @@ ap.add_argument('--ckpt', required=True)
 ap.add_argument('--repeat', type=int, default=2)
 ap.add_argument('--efield', type=float, nargs=3, default=[0.0, 0.0, 0.05])
 ap.add_argument('--n', type=int, default=20)
-ap.add_argument('--modes', default='off,fused')
+ap.add_argument(
+    '--kernels', default='e3nn,fused', help="e3nn, fused or 'e3nn,fused'"
+)
 args = ap.parse_args()
+if not set(args.kernels.split(',')) <= {'e3nn', 'fused'}:
+    ap.error("--kernels takes e3nn, fused or 'e3nn,fused'")
 here = os.path.dirname(os.path.abspath(__file__))
 res = {}
-for mode in args.modes.split(','):
+for kernels in args.kernels.split(','):
     code = CASE.format(
         here=here,
         ckpt=args.ckpt,
-        mode=mode,
+        kernels=kernels,
         efield=args.efield,
         k=args.repeat,
         n=args.n,
@@ -67,16 +71,16 @@ for mode in args.modes.split(','):
     )
     m = re.search(r'^OUT (.*)$', out.stdout, re.M)
     if not m:
-        sys.exit(f'{mode} failed:\n{out.stdout[-500:]}{out.stderr[-1500:]}')
-    r = res[mode] = json.loads(m.group(1))
+        sys.exit(f'{kernels} failed:\n{out.stdout[-500:]}{out.stderr[-1500:]}')
+    r = res[kernels] = json.loads(m.group(1))
     print(
-        f'{mode:6s} {r["atoms"]} atoms, {r["edges"]} edges  model call '
+        f'{kernels:6s} {r["atoms"]} atoms, {r["edges"]} edges  model call '
         f'{r["model"]:8.1f} ms [{r["model_min"]:.1f}..{r["model_max"]:.1f}]  '
         f'ASE step {r["ase"]:8.1f} ms [{r["ase_min"]:.1f}..{r["ase_max"]:.1f}]  '
         f'peak RSS {r["rss_peak"]:.2f} GB, driver {r["driver"]:.2f} GB'
     )
-if 'off' in res and 'fused' in res:
+if 'e3nn' in res and 'fused' in res:
     print(
-        f'speed-up: model call {res["off"]["model"] / res["fused"]["model"]:.1f}x, '
-        f'ASE step {res["off"]["ase"] / res["fused"]["ase"]:.1f}x'
+        f'speed-up: model call {res["e3nn"]["model"] / res["fused"]["model"]:.1f}x, '
+        f'ASE step {res["e3nn"]["ase"] / res["fused"]["ase"]:.1f}x'
     )

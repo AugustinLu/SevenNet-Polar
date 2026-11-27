@@ -47,7 +47,9 @@ class Trainer:
         distributed_backend: str = 'nccl',
     ) -> None:
         if device == 'auto':
-            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            from sevenn.util import auto_device
+
+            device = auto_device()
             if distributed_backend == 'mpi':
                 device = 'cpu'
 
@@ -70,18 +72,6 @@ class Trainer:
 
         self.device = torch.device(device)
         self.distributed = distributed
-        self._pad = None
-        if self.device.type == 'mps':
-            # Apple GPU: fused kernels in training and validation
-            from sevenn.nn.mps_opt import check_torch, enable_or_warn
-
-            check_torch('training')
-            if os.environ.get('SEVENNET_MPS_OPT') != 'off':
-                if enable_or_warn(self.model, 'training') is not None:
-                    # few batch shapes, or the MPS graph cache grows without bound
-                    from sevenn.nn.mps_opt import BatchPadder
-
-                    self._pad = BatchPadder(self.model)
 
         optimizer_args = optimizer_args or {}
         param = [p for p in self.model.parameters() if p.requires_grad]
@@ -171,8 +161,6 @@ class Trainer:
             if is_train:
                 self.optimizer.zero_grad()
             batch = batch.to(self.device, non_blocking=True)
-            if self._pad is not None:
-                batch = self._pad(batch)
             output = self.model(batch)
             if error_recorder is not None:
                 error_recorder.update(output)

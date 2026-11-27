@@ -1,28 +1,25 @@
-"""Apple GPU (MPS) execution of a SevenNet model: same weights, same results to
-float32 noise, much faster.
+"""Fused modules on the Apple GPU: same weights, same results to float32 noise.
 
 enable(model) switches supported modules to subclasses that run fused Metal kernels
-(nn/mps_fused.py). Convolutions run the kernels in eval and train mode, with
+(sevenn/mps/kernels.py). Convolutions run the kernels in eval and train mode, with
 derivatives to any order, so force training works. Linear, self-connection and gate
 layers run kernels in eval mode, and in train mode a few PyTorch operations built
 from the same tables, which autograd differentiates to any order; a layout they
 do not cover keeps the e3nn code. Nothing is registered in the state dict;
-disable(model) undoes it, and enable() again starts from scratch.
-SevenNetCalculator imports this only for device='mps' or an explicit mps_opt.
-pad_edges() keeps tensor shapes stable across MD steps.
+disable(model) undoes it, and enable() again starts from scratch. runtime.py calls
+both when a model moves to or from the Apple GPU.
 
 In eval mode the kernels treat the weights of linear and self-connection layers as
-constants: derivatives with respect to positions, strain and field are complete,
-parameter gradients are not. For those use train mode or disable(). Changes through
-load_state_dict, an optimizer or in-place operations on a parameter are noticed
-before the next call (parameter identity and version counter), and module conversions
-(.to, .half, .float) drop the derived tables; writes through param.data are not
-noticed, call disable() and enable() after those.
+constants: derivatives with respect to the inputs (positions, strain) are complete,
+parameter gradients are not. For those use train mode or move the model off the
+Apple GPU. Changes through load_state_dict, an optimizer or in-place operations on a
+parameter are noticed before the next call (parameter identity and version counter),
+and module conversions (.to, .half, .float) drop the derived tables; writes through
+param.data are not noticed, move the model to the CPU and back after those.
 
 """
 
 import copy
-import os
 import warnings
 from typing import Dict, List, Optional, Set
 
@@ -31,10 +28,12 @@ import torch
 from e3nn.nn import Gate
 from e3nn.o3 import FullyConnectedTensorProduct, Linear, TensorProduct
 
-import sevenn._keys as KEY
+from sevenn.nn.convolution import IrrepsConvolution
+from sevenn.nn.node_embedding import OnehotEmbedding
+from sevenn.nn.self_connection import SelfConnectionIntro
 
-from .convolution import IrrepsConvolution
-from .mps_fused import (
+from . import _policy
+from .kernels import (
     CsrApply,
     CsrMap,
     EdgePlan,
@@ -43,15 +42,12 @@ from .mps_fused import (
     GateApply,
     GateTables,
 )
-from .node_embedding import OnehotEmbedding
-from .self_connection import SelfConnectionIntro
-from .sequential import AtomGraphSequential
 
 ALL_PARTS = frozenset({'conv', 'linear', 'selfconn', 'gate'})
 # train mode: up to this many atom types, multiply by every type's matrix and select
 SELFCONN_ALL_TYPES = 8
-# above this PyTorch's mm beats the sparse kernel (M: 133 -> 100 ms at 324 atoms; S
-# unaffected)
+# above this many nonzeros PyTorch's dense mm beats the sparse kernel (measured on
+# an M5 Pro with a larger model: 133 -> 100 ms per step at 324 atoms)
 LINEAR_MAX_NNZ = 100_000
 
 
@@ -62,7 +58,7 @@ def _matrix_triplets(fn, ni: int, batch: int = 2048):
     with torch.no_grad():
         for s in range(0, ni, batch):
             k = min(batch, ni - s)
-            x = torch.zeros(k, ni)
+            x = torch.zeros(k, ni, dtype=torch.float32)
             x[torch.arange(k), s + torch.arange(k)] = 1.0
             r = fn(x).numpy()
             i, o = np.nonzero(r)
@@ -72,7 +68,7 @@ def _matrix_triplets(fn, ni: int, batch: int = 2048):
     return np.concatenate(II), np.concatenate(OO), np.concatenate(VV)
 
 
-def _weight_map(probe, param, run):
+def _weight_map(param, run):
     """Which entry of `param` and which constant give each nonzero output of the
     linear map `run`, read off by probing: weights all one give the constants,
     weights 1, 2, 3, ... the index, and random weights check that each nonzero output
@@ -243,7 +239,8 @@ class FusedLinear(_DerivedTables, Linear):
         trip = _matrix_triplets(
             lambda x: ref(x, None, torch.zeros_like(ref.bias)), ref.irreps_in.dim
         )
-        bias = ref(torch.zeros(1, ref.irreps_in.dim))[0].detach().numpy()
+        zero = torch.zeros(1, ref.irreps_in.dim, dtype=torch.float32)
+        bias = ref(zero)[0].detach().numpy()
         self._map = CsrMap(
             [trip], bias, ref.irreps_in.dim, ref.irreps_out.dim, self.weight.device
         )
@@ -263,7 +260,7 @@ class FusedLinear(_DerivedTables, Linear):
                 if probe.bias.numel():
                     probe.bias.zero_()
             mat = _TrainMatrix(
-                *_weight_map(probe, probe.weight, lambda: _by_rows(probe, ni)),
+                *_weight_map(probe.weight, lambda: _by_rows(probe, ni)),
                 (ni, no),
                 self.weight.device,
             )
@@ -273,7 +270,6 @@ class FusedLinear(_DerivedTables, Linear):
                     probe.weight.zero_()
                 vec = _TrainMatrix(
                     *_weight_map(
-                        probe,
                         probe.bias,
                         lambda: probe(torch.zeros(1, ni, dtype=torch.float64))[0],
                     ),
@@ -323,9 +319,9 @@ def _selfconn_triplets(ref: FullyConnectedTensorProduct) -> List:
         if ins.connection_mode != 'uvw' or W.shape[1] != nt:
             raise NotImplementedError(f'self-connection instruction {ins}')
         d = ref.irreps_in1[ins.i_in1].ir.dim
-        x = torch.zeros(1, ni)
+        x = torch.zeros(1, ni, dtype=torch.float32)
         x[0, sl1[ins.i_in1].start] = 1.0
-        z = torch.zeros(1, nt)
+        z = torch.zeros(1, nt, dtype=torch.float32)
         z[0, 0] = 1.0
         with torch.no_grad():
             c = float(
@@ -369,10 +365,10 @@ class FusedSelfConnection(_DerivedTables, FullyConnectedTensorProduct):
         trips = _selfconn_triplets(ref)
         # the matrices must reproduce the module
         x = torch.randn(
-            3, ni, generator=torch.Generator().manual_seed(0)
+            3, ni, dtype=torch.float32, generator=torch.Generator().manual_seed(0)
         )  # leaves the global generator alone
         for t in {0, nt // 2, nt - 1}:
-            z = torch.zeros(3, nt)
+            z = torch.zeros(3, nt, dtype=torch.float32)
             z[:, t] = 1.0
             r = np.zeros((3, no))
             np.add.at(r.T, trips[t][1], (x[:, trips[t][0]].numpy() * trips[t][2]).T)
@@ -580,18 +576,19 @@ def _gate_tables(gate: Gate, device) -> GateTables:
             cst.append(k)
         if len(gated):
             ng, nk = len(gated), len(gates)
+            f32 = dict(dtype=torch.float32, device=device)  # not the default dtype
             # elementwise product: which gated slot and gate feed each output slot,
             # and its numeric factor
             to_gated = (
                 gate.mul(
-                    torch.eye(ng, device=device), torch.ones(ng, nk, device=device)
+                    torch.eye(ng, **f32), torch.ones(ng, nk, **f32)
                 )
                 .cpu()
                 .numpy()
             )
             to_gate = (
                 gate.mul(
-                    torch.ones(nk, ng, device=device), torch.eye(nk, device=device)
+                    torch.ones(nk, ng, **f32), torch.eye(nk, **f32)
                 )
                 .cpu()
                 .numpy()
@@ -705,7 +702,8 @@ def enable(model, parts='all') -> Dict[str, int]:
                 m._kernels, m._plan = FusedTP(m.convolution), plan
                 m.__class__ = FusedConvolution
                 report['conv_fused'] += 1
-            except (NotImplementedError, ValueError) as e:
+            except (NotImplementedError, ValueError, RuntimeError) as e:
+                # RuntimeError: the generated shader did not compile
                 warnings.warn(f'convolution keeps the e3nn code on the GPU: {e}')
                 report['conv_e3nn'] += 1
         elif (
@@ -754,22 +752,8 @@ def enable(model, parts='all') -> Dict[str, int]:
     return report
 
 
-_MPS_TORCH_OK: Optional[bool] = None
-
-
 def mps_torch_supported() -> bool:
-    """Whether this PyTorch can run SevenNet on the Apple GPU at all. The message
-    scatter of the e3nn code (scatter_reduce) has an MPS kernel from PyTorch 2.6."""
-    global _MPS_TORCH_OK
-    if _MPS_TORCH_OK is None:
-        try:
-            x = torch.zeros(2, device='mps')
-            idx = torch.zeros(1, dtype=torch.long, device='mps')
-            x.scatter_reduce_(0, idx, torch.ones(1, device='mps'), reduce='sum')
-            _MPS_TORCH_OK = True
-        except (NotImplementedError, RuntimeError):
-            _MPS_TORCH_OK = False
-    return _MPS_TORCH_OK
+    return _policy.torch_supported()
 
 
 def check_torch(purpose: str) -> None:
@@ -782,19 +766,6 @@ def check_torch(purpose: str) -> None:
             f'message scatter (scatter_reduce) on MPS. The fused kernels need '
             f'2.7 or later.'
         )
-
-
-def enable_or_warn(model, purpose: str) -> Optional[Dict[str, int]]:
-    """enable() for the Trainer and `sevenn inference` on device='mps', or a warning
-    and the e3nn code where this PyTorch cannot compile Metal kernels, as in the
-    calculator."""
-    if not hasattr(torch.mps, 'compile_shader'):
-        warnings.warn(
-            f'{purpose} with the reference e3nn code on the GPU: torch '
-            f'{torch.__version__} has no torch.mps.compile_shader'
-        )
-        return None
-    return enable(model)
 
 
 def _drop(m, *names) -> None:
@@ -817,275 +788,3 @@ def disable(model) -> None:
             m.__class__ = Gate
             _drop(m, '_tables', '_train')
     model.__dict__.pop('_mps_plan', None)
-
-
-class MpsRuntime:
-    """What a SevenNetCalculator keeps for the Apple GPU: the switch, the padding
-    bucket and a report of what runs how."""
-
-    def __init__(self, model, mode: str, bucket: int, cutoff: float):
-        if isinstance(model, AtomGraphSequential):
-            disable(
-                model
-            )  # an instance may come fused: 'off' has to mean the e3nn code
-        self.mode = mode
-        self.bucket = 0
-        self.cutoff = cutoff
-        self.num_edges = 0
-        self.plan = None
-        self.report: Dict[str, int] = {}
-        if mode == 'off':
-            return
-        self.report = enable(model)
-        self.plan = model._mps_plan
-        if bucket > 1:
-            # a convolution left on e3nn visits pad edges, and their derivatives are
-            # noise rather than zero
-            if self.report['conv_e3nn'] == 0 and padding_is_safe(
-                model, cutoff, all_fused=True
-            ):
-                self.bucket = int(bucket)
-            else:
-                warnings.warn(
-                    'edge padding disabled: pad edges would not be silent for this '
-                    'model'
-                )
-
-    @classmethod
-    def for_calculator(
-        cls, calc, requested: Optional[str], bucket: int, is_instance: bool
-    ):
-        env = os.environ.get('SEVENNET_MPS_OPT')
-        mode = (
-            requested
-            if requested is not None
-            else (env if env is not None else 'fused')
-        )
-        if mode not in ('fused', 'off'):
-            raise ValueError(f"mps_opt must be 'fused' or 'off', got {mode!r}")
-        if calc.device.type != 'mps':
-            if mode == 'fused' and requested is not None:
-                raise ValueError(
-                    f"mps_opt='fused' needs device='mps', got {calc.device}"
-                )
-            return None
-        check_torch('SevenNetCalculator')
-        if mode == 'fused':
-            problem = None
-            if not isinstance(calc.model, AtomGraphSequential):
-                problem = 'a deployed TorchScript model has no modules to switch'
-            elif not hasattr(torch.mps, 'compile_shader'):
-                problem = (
-                    f'torch {torch.__version__} has no '
-                    f'torch.mps.compile_shader (needs 2.7 or later; all tests pass '
-                    f'from 2.10)'
-                )
-            if problem is not None and requested is not None:
-                raise ValueError(f"mps_opt='fused' is not possible: {problem}")
-            if problem is not None:
-                warnings.warn(
-                    f'running the reference e3nn code on the GPU: {problem}'
-                )
-                mode = 'off'
-        if os.environ.get('PYTORCH_ENABLE_MPS_FALLBACK') == '1':
-            warnings.warn(
-                'PYTORCH_ENABLE_MPS_FALLBACK=1 lets PyTorch run unsupported '
-                'operations on the '
-                'CPU without telling you. SevenNet does not need it on the Apple '
-                'GPU.'
-            )
-        fused_already = (
-            any(isinstance(m, _FUSED) for m in calc.model.modules())
-            if isinstance(calc.model, AtomGraphSequential)
-            else False
-        )
-        if is_instance and (mode == 'fused' or fused_already):
-            try:
-                # the instance may be shared, e.g. with a training loop: this keeps
-                # it on the e3nn code, but the
-                # constructor has already set eval mode and moved it to the device,
-                # as it does on any device
-                calc.model = copy.deepcopy(calc.model)
-            except Exception as e:  # e.g. a TorchScript activation cannot be copied
-                if requested is not None:
-                    raise ValueError(
-                        f"mps_opt='fused' on a model instance needs a copy of it: "
-                        f'{e}'
-                    ) from e
-                warnings.warn(
-                    f'running the reference e3nn code on the GPU, the model cannot '
-                    f'be copied: {e}'
-                )
-                mode = 'off'
-        return cls(calc.model, mode, bucket, calc.cutoff)
-
-    def finish(self) -> None:
-        """A call that failed before its first convolution must not leave its padding
-        note for another graph."""
-        if self.plan is not None:
-            self.plan.expect_padded = None
-
-    def prepare(self, graph: Dict) -> Dict:
-        self.num_edges = graph[KEY.EDGE_IDX].shape[1]
-        if self.plan is None:
-            return graph
-        graph = pad_edges(graph, self.cutoff, self.bucket)
-        self.plan.expect_padded = (self.num_edges, graph[KEY.EDGE_IDX].shape[1])
-        return graph
-
-
-_FUSED = (FusedConvolution, FusedLinear, FusedSelfConnection, FusedGate)
-
-
-def _is_edge_key(key: str) -> bool:
-    """Per-edge tensors of a batch or an output, by name: never a per-atom tensor,
-    even when a small batch has as many atoms as edges."""
-    return key in (KEY.EDGE_VEC, KEY.EDGE_LENGTH, KEY.EDGE_ATTR, KEY.EDGE_EMBEDDING,
-                   KEY.CELL_SHIFT) or key.startswith('edge_')
-
-
-class BatchPadder:
-    """Pads the edges of a batch (training, validation, `sevenn inference`) to a
-    multiple of `bucket`, so that the Apple GPU sees few distinct tensor shapes.
-
-    PyTorch's MPS backend compiles a graph for every new shape of an operation
-    and keeps it for the life of the process. A shuffled data set gives almost
-    every batch a new number of edges, so without padding the process grows by
-    about a gigabyte a minute in training. Pad edges are those of pad_edges: atom
-    0 to atom 0 with vector (cutoff, 0, 0), placed after the real edges, where the
-    kernels never look. Energy, forces, stress, Born charges and every gradient
-    are therefore those of the unpadded batch. Off (bucket 0) when a convolution
-    is left on e3nn or a pad edge would not be silent, as in the calculator.
-
-    """
-
-    def __init__(self, model, bucket: int = 256):
-        self.bucket = 0
-        self.plan = getattr(model, '_mps_plan', None)
-        self.cutoff = float(getattr(model, 'cutoff', 0.0) or 0.0)
-        if self.plan is None or bucket <= 1:
-            return
-        on_e3nn = any(type(m) is IrrepsConvolution for m in model.modules())
-        if on_e3nn or self.cutoff <= 0.0 or not padding_is_safe(
-            model, self.cutoff, all_fused=True
-        ):
-            warnings.warn(
-                'edge padding of batches disabled: pad edges would not be silent '
-                'for this model, and memory may grow with each new batch shape'
-            )
-            return
-        self.bucket = int(bucket)
-
-    def __call__(self, batch):
-        if not self.bucket:
-            return batch
-        idx = batch[KEY.EDGE_IDX]
-        n_real = int(idx.shape[1])
-        n_pad = (-n_real) % self.bucket
-        if n_pad == 0 or n_real == 0:
-            return batch
-        for key in list(batch.keys()):
-            t = batch[key]
-            if (
-                key == KEY.EDGE_IDX
-                or not _is_edge_key(key)
-                or not isinstance(t, torch.Tensor)
-                or t.dim() == 0
-                or t.shape[0] != n_real
-            ):
-                continue
-            pad = t.new_zeros((n_pad,) + tuple(t.shape[1:]))
-            if key == KEY.EDGE_VEC:
-                pad[:, 0] = self.cutoff
-            batch[key] = torch.cat([t, pad], 0)
-        batch[KEY.EDGE_IDX] = torch.cat([idx, idx.new_zeros((2, n_pad))], 1)
-        self.plan.expect_padded = (n_real, n_real + n_pad)
-        return batch
-
-    def unpad(self, out, n_real: int):
-        """Drop the pad edges from a model output, e.g. before it is split back into
-        structures; n_real is the edge count before padding."""
-        n_all = int(out[KEY.EDGE_IDX].shape[1])
-        if n_all == n_real:
-            return out
-        for key in list(out.keys()):
-            t = out[key]
-            if key == KEY.EDGE_IDX:
-                out[key] = t[:, :n_real]
-            elif (
-                _is_edge_key(key)
-                and isinstance(t, torch.Tensor)
-                and t.dim() > 0
-                and t.shape[0] == n_all
-            ):
-                out[key] = t[:n_real]
-        return out
-
-
-def padding_is_safe(model, cutoff: float, all_fused: bool = False) -> bool:
-    """True if a pad edge (r = cutoff) gives exactly zero radial weights in every
-    convolution, with finite derivatives.
-
-    These derivatives are float32 noise, not 0 (seen up to 5e-5 in 7net-l3i5). With
-    all convolutions fused the noise goes nowhere, because the kernels do not visit
-    pad edges. A convolution left on e3nn would multiply it by dE/dw (forces cancel,
-    as source = destination, but the stress does not), so without all_fused the
-    derivatives must also stay below 1e-5.
-
-    """
-    device = next(model.parameters()).device
-    vec = torch.tensor(
-        [[cutoff, 0.0, 0.0]], dtype=torch.float32, device=device, requires_grad=True
-    )
-    data = model._modules['edge_embedding']({KEY.EDGE_VEC: vec})
-    emb = data[KEY.EDGE_EMBEDDING]
-    tensors = [emb] + [
-        m.weight_nn(emb)
-        for m in model.modules()
-        if getattr(m, 'weight_nn', None) is not None
-    ]
-    for t in tensors:
-        if float(t.detach().abs().max()) != 0.0:
-            return False
-        for i in range(
-            0, t.shape[1], max(t.shape[1] // 8, 1)
-        ):  # a sample of components; the sum could cancel
-            d = torch.autograd.grad(t[:, i].sum(), vec, retain_graph=True)[0]
-            if not bool(torch.isfinite(d).all()) or (
-                not all_fused and float(d.abs().max()) > 1e-5
-            ):
-                return False
-    return True
-
-
-def pad_edges(graph: Dict, cutoff: float, bucket: int) -> Dict:
-    """Pad edge_index / edge_vec of a graph dict (as made by
-    unlabeled_atoms_to_graph) to a multiple of `bucket` edges.
-
-    MPS caches graphs by tensor shape and in MD the number of edges changes almost
-    every step. Pad edges go from atom 0 to atom 0 with vector (cutoff, 0, 0), where
-    the cutoff function vanishes, so their radial weights are exactly 0
-    (padding_is_safe checks this on the actual model) and the kernels do not visit
-    them at all.
-
-    """
-    n_pad = (-graph['edge_index'].shape[1]) % bucket if bucket > 1 else 0
-    if n_pad == 0:
-        return graph
-    out = dict(graph)
-    out['edge_index'] = np.concatenate(
-        [graph['edge_index'], np.zeros((2, n_pad), dtype=graph['edge_index'].dtype)],
-        axis=1,
-    )
-    pad_vec = np.zeros((n_pad, 3), dtype=graph['edge_vec'].dtype)
-    pad_vec[:, 0] = cutoff
-    out['edge_vec'] = np.concatenate([graph['edge_vec'], pad_vec], axis=0)
-    if 'cell_shift' in graph:
-        out['cell_shift'] = np.concatenate(
-            [
-                graph['cell_shift'],
-                np.zeros((n_pad, 3), dtype=graph['cell_shift'].dtype),
-            ],
-            axis=0,
-        )
-    return out

@@ -41,8 +41,6 @@ class SevenNetCalculator(Calculator):
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
-        mps_opt: Optional[str] = None,
-        mps_edge_bucket: int = 256,
         **kwargs,
     ) -> None:
         """Initialize SevenNetCalculator.
@@ -71,14 +69,6 @@ class SevenNetCalculator(Calculator):
             if True, use OpenEquivariance to accelerate inference.
         sevennet_config: dict | None, default=None
             Not used, but can be used to carry meta information of this calculator
-        mps_opt: str | None, default=None
-            Apple GPU only (device='mps'): 'fused' runs supported modules in fused
-            Metal kernels (see sevenn/nn/mps_opt.py), 'off' runs the reference e3nn
-            code. None means 'fused' unless the environment variable SEVENNET_MPS_OPT
-            is 'off'. Asking for 'fused' on another device is an error.
-        mps_edge_bucket: int, default=256
-            Apple GPU with mps_opt: pad the edge list to a multiple of this,
-            so tensor shapes repeat in MD. 0 or 1 disables the padding.
         """
         super().__init__(**kwargs)
         self.sevennet_config = None
@@ -110,8 +100,10 @@ class SevenNetCalculator(Calculator):
 
         if isinstance(device, str):  # TODO: do we really need this?
             if device == 'auto':
+                # a deployed TorchScript model keeps float64 tensors, which the
+                # Apple GPU cannot hold, and has no modules to fuse
                 self.device = torch.device(
-                    'cuda' if torch.cuda.is_available() else 'cpu'
+                    util.auto_device(apple_gpu=file_type != 'torchscript')
                 )
             else:
                 self.device = torch.device(device)
@@ -187,14 +179,6 @@ class SevenNetCalculator(Calculator):
 
         self.model.to(self.device)
         self.model.eval()
-        self.mps_runtime = None
-        if mps_opt is not None or self.device.type == 'mps':
-            from sevenn.nn.mps_opt import MpsRuntime
-
-            self.mps_runtime = MpsRuntime.for_calculator(
-                self, mps_opt, mps_edge_bucket,
-                is_instance=isinstance(model, AtomGraphSequential),
-            )
         self.implemented_properties = [
             'free_energy',
             'energy',
@@ -279,10 +263,9 @@ class SevenNetCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
         if atoms is None:
             raise ValueError('No atoms to evaluate')
-        graph = unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=is_ts_type)
-        if self.mps_runtime is not None:
-            graph = self.mps_runtime.prepare(graph)
-        data = AtomGraphData.from_numpy_dict(graph)
+        data = AtomGraphData.from_numpy_dict(
+            unlabeled_atoms_to_graph(atoms, self.cutoff, with_shift=is_ts_type)
+        )
         if self.modal:
             data[KEY.DATA_MODALITY] = self.modal
 
@@ -299,13 +282,7 @@ class SevenNetCalculator(Calculator):
             data = data.to_dict()
             del data['data_info']
 
-        try:
-            self.results = self.output_to_results(self.model(data))
-        finally:
-            if self.mps_runtime is not None:
-                self.mps_runtime.finish()
-        if self.mps_runtime is not None:
-            self.results['num_edges'] = self.mps_runtime.num_edges
+        self.results = self.output_to_results(self.model(data))
 
 
 class FieldCalculator(Calculator):
@@ -325,8 +302,13 @@ class FieldCalculator(Calculator):
     is not the Jacobian of any polarization function, so the field force
     is not the gradient of an energy: there is no field energy term, and so
     no field virial. Energy and stress are those of the base calculator.
-    Thermostatted MD is unaffected; NVE energy-conservation checks and
-    energy minimization under a field are not meaningful.
+    MD under a field is driven by these non-conservative forces: a
+    thermostat keeps it stable, but it does not sample an equilibrium
+    finite-field ensemble, and NPT sees only the zero-field stress. NVE
+    energy-conservation checks and energy minimization under a field are
+    not meaningful. `enforce_asr` makes the Born charges sum to zero, which
+    is right for a neutral cell; a charged cell has sum Z* = Q I, so leave
+    it off there.
 
     Parameters
     ----------

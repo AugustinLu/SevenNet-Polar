@@ -1,14 +1,14 @@
 /* ----------------------------------------------------------------------
    Pair style e3gnn for the Apple GPU: plain `lmp -in`, serial.
 
-   Same input as the NVIDIA pair style, with the checkpoint in place of the deployed model:
+   As the NVIDIA pair style, with the checkpoint (or a pretrained name) in place of the deployed model:
        pair_style  e3gnn
-       pair_coeff  * * checkpoint.pth [efield Ex Ey Ez ...] O Zr
+       pair_coeff  * * checkpoint.pth [keywords] O Zr
 
    TorchScript cannot hold the Metal kernels, so this embeds Python and calls
-   sevenn/lammps_pair.py, which owns the model. Build with `sevenn patch_lammps --enable_mps` or build_plugin.sh.
+   sevenn/mps/lammps/pair.py, which owns the model. Build with `sevenn patch_lammps` on a Mac, or build_plugin.sh.
 
-   Part of SevenNet-Polar, MIT license (see LICENSE). It is compiled against LAMMPS headers:
+   Part of SevenNet, MIT license (see LICENSE). It is compiled against LAMMPS headers:
    a LAMMPS build or plugin containing it is covered by the GPL of LAMMPS.
 ------------------------------------------------------------------------- */
 
@@ -103,21 +103,33 @@ void PairE3GNNMps::coeff(int narg, char **arg) {
   start_python(error);
   PythonLock lock;
   PyObject *args = PyList_New(narg - 2);
-  for (int i = 2; i < narg; i++) PyList_SET_ITEM(args, i - 2, PyUnicode_FromString(arg[i]));
-  PyObject *box = box_tuple(domain);
-  PyObject *module = import_driver();
+  for (int i = 2; args && i < narg; i++) {
+    PyObject *word = PyUnicode_FromString(arg[i]);
+    if (!word) {
+      Py_CLEAR(args);
+      break;
+    }
+    PyList_SET_ITEM(args, i - 2, word);  // steals the reference
+  }
+  PyObject *box = args ? box_tuple(domain) : nullptr;
+  PyObject *module = box ? import_driver() : nullptr;
   PyObject *made = module ? PyObject_CallMethod(module, "PairDriver", "OiO", args, n, box) : nullptr;
   Py_XDECREF(module);
-  Py_DECREF(box);
-  Py_DECREF(args);
+  Py_XDECREF(box);
+  Py_XDECREF(args);
   if (!made) fail("loading the model");
   driver = made;
 
   PyObject *cut = PyObject_GetAttrString(driver, "cutoff");
   PyObject *banner = PyObject_GetAttrString(driver, "banner");
-  if (!cut || !banner) fail("reading the model");
-  cutoff = PyFloat_AsDouble(cut);
-  utils::logmesg(lmp, "{}\n", PyUnicode_AsUTF8(banner));
+  cutoff = cut ? PyFloat_AsDouble(cut) : -1.0;
+  const char *text = banner ? PyUnicode_AsUTF8(banner) : nullptr;
+  if (!cut || !banner || !text || PyErr_Occurred()) {
+    Py_XDECREF(cut);
+    Py_XDECREF(banner);
+    fail("reading the model");
+  }
+  utils::logmesg(lmp, "{}\n", text);
   Py_DECREF(cut);
   Py_DECREF(banner);
 
@@ -134,6 +146,8 @@ void PairE3GNNMps::init_style() {
   if (strcmp(update->unit_style, "metal") != 0)
     error->all(FLERR, std::string("e3gnn needs units metal, got ") + update->unit_style);
   if (neighbor->nex_type || neighbor->nex_group || neighbor->nex_mol) error->all(FLERR, "e3gnn builds its own edges and cannot honour neigh_modify exclude");
+  if (neighbor->includegroup) error->all(FLERR, "e3gnn builds its own edges and cannot honour neigh_modify include");
+  if (force->pair != this) error->all(FLERR, "e3gnn on the Apple GPU takes every atom: it cannot be a sub-style of pair_style hybrid");
   if (atom->natoms == 0) error->all(FLERR, "e3gnn needs at least one atom");
 }
 
@@ -143,6 +157,7 @@ void PairE3GNNMps::compute(int eflag, int vflag) {
   ev_init(eflag, vflag);
   if (vflag_atom) error->all(FLERR, "e3gnn: atomic stress is not supported");
   const int nlocal = atom->nlocal;
+  if (nlocal == 0) return;  // all atoms lost, with thermo_modify lost ignore
   double virial_now[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   double energy = 0.0;
   {
@@ -153,11 +168,14 @@ void PairE3GNNMps::compute(int eflag, int vflag) {
     PyObject *eper = eflag_atom ? view(eatom, 8L * nlocal, PyBUF_WRITE) : (Py_INCREF(Py_None), Py_None);
     PyObject *vir = view(virial_now, sizeof(virial_now), PyBUF_WRITE);
     PyObject *box = box_tuple(domain);
-    PyObject *out = PyObject_CallMethod(driver, "compute", "iOOOOOO", nlocal, x, f, type, eper, vir, box);
-    for (PyObject *o : {x, f, type, eper, vir, box}) Py_DECREF(o);
+    PyObject *out = nullptr;
+    if (x && f && type && eper && vir && box)
+      out = PyObject_CallMethod(driver, "compute", "iOOOOOO", nlocal, x, f, type, eper, vir, box);
+    for (PyObject *o : {x, f, type, eper, vir, box}) Py_XDECREF(o);
     if (!out) fail("computing forces");
     energy = PyFloat_AsDouble(out);
     Py_DECREF(out);
+    if (PyErr_Occurred()) fail("reading the energy");
   }
   if (eflag_global) eng_vdwl += energy;
   if (vflag_global)
@@ -168,9 +186,17 @@ PyObject *PairE3GNNMps::import_driver() {
   PyObject *sys_path = PySys_GetObject("path");
   const char *root = getenv("SEVENN_ROOT");
   PyObject *where = PyUnicode_FromString(root ? root : SEVENN_DEFAULT_ROOT);
-  PyList_Insert(sys_path, 0, where);
+  if (!sys_path || !where) {
+    Py_XDECREF(where);
+    return nullptr;
+  }
+  const int present = PySequence_Contains(sys_path, where);
+  if (present < 0 || (present == 0 && PyList_Insert(sys_path, 0, where) < 0)) {
+    Py_DECREF(where);
+    return nullptr;
+  }
   Py_DECREF(where);
-  return PyImport_ImportModule("sevenn.lammps_pair");
+  return PyImport_ImportModule("sevenn.mps.lammps.pair");
 }
 
 void PairE3GNNMps::fail(const char *what) {
@@ -180,9 +206,11 @@ void PairE3GNNMps::fail(const char *what) {
   std::string text = "unknown";
   PyObject *str = value ? PyObject_Str(value) : nullptr;
   if (str) {
-    text = PyUnicode_AsUTF8(str);
+    const char *utf8 = PyUnicode_AsUTF8(str);
+    if (utf8) text = utf8;
     Py_DECREF(str);
   }
+  PyErr_Clear();  // a failure while formatting must not hide the original error
   PyErr_Display(type, value, traceback);
   Py_XDECREF(type);
   Py_XDECREF(value);

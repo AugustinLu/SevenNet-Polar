@@ -1,20 +1,20 @@
-"""Python side of pair style e3gnn on the Apple GPU (pair_e3gnn_mps/): owns the
+"""Python side of pair style e3gnn on the Apple GPU (src/): owns the
 calculator and computes for LAMMPS.
 
-pair_coeff * * checkpoint.pth [modal NAME] [efield Ex Ey Ez] [enforce_asr yes|no]
-element1 element2 ...
-Keywords as in the NVIDIA pair style; modal is for multi-fidelity models.
+pair_coeff * * checkpoint.pth [keywords] element1 element2 ...
+Keywords as in the NVIDIA pair style: modal NAME selects the fidelity of a
+multi-fidelity model (see KEYWORDS for the others).
 
 """
 
-from typing import List, Sequence
+from typing import Callable, Dict, List, Sequence
 
 import numpy as np
 import torch
 from ase import Atoms
 from ase.data import atomic_numbers
 
-from sevenn.calculator import FieldCalculator, SevenNetCalculator
+from sevenn.calculator import SevenNetCalculator
 
 _VIRIAL = [
     0,
@@ -37,44 +37,82 @@ def _cell(box) -> np.ndarray:
     )
 
 
+def _modal(args: List[str], i: int, out: dict) -> int:
+    if i + 1 == len(args):
+        raise ValueError('e3gnn: modal requires a name')
+    out['modal'] = args[i + 1]
+    return i + 2
+
+
+# pair_coeff keywords before the element list: name -> reader(args, i, out) returning
+# the index after its values
+KEYWORDS: Dict[str, Callable[[List[str], int, dict], int]] = {'modal': _modal}
+
+
+def _plain(calc, opt: dict):
+    """The calculator LAMMPS calls, and a note for the log."""
+    return calc, ''
+
+
+WRAP = _plain
+
+
+# ---- SevenNet-Polar: field keywords (not in SevenNet) ----
+def _efield(args: List[str], i: int, out: dict) -> int:
+    if out.get('efield') is not None:
+        raise ValueError('e3gnn: give one field keyword')
+    out['efield'] = [float(x) for x in args[i + 1 : i + 4]]
+    if len(out['efield']) != 3:
+        raise ValueError('e3gnn: efield requires 3 values')
+    return i + 4
+
+
+def _enforce_asr(args: List[str], i: int, out: dict) -> int:
+    i += 1
+    if i < len(args) and args[i] in ('yes', 'no'):
+        out['enforce_asr'] = args[i] == 'yes'
+        i += 1
+    return i
+
+
+def _efield_virial(args: List[str], i: int, out: dict) -> int:
+    raise ValueError(
+        'e3gnn: efield_virial is not supported: direct models derive from no field '
+        'energy and have no field stress'
+    )
+
+
+def _field(calc, opt: dict):
+    if opt.get('efield') is None:
+        return calc, ', field none'
+    from sevenn.calculator import FieldCalculator
+
+    field = FieldCalculator(calc, enforce_asr=opt.get('enforce_asr', True))
+    field.set_efield(opt['efield'])
+    return field, (
+        f', field {opt["efield"]} (reported energy excludes the field term, so '
+        f'forces are not its gradient)'
+    )
+
+
+KEYWORDS.update(
+    efield=_efield, enforce_asr=_enforce_asr, efield_virial=_efield_virial
+)
+WRAP = _field
+# ---- end of SevenNet-Polar ----
+
+
 def _parse(args: List[str]) -> dict:
-    out = dict(modal=None, enforce_asr=True, efield=None)
+    out: dict = dict(modal=None)
     i = 0
-    while i < len(args) and args[i] in (
-        'modal',
-        'efield',
-        'enforce_asr',
-        'efield_virial',
-    ):
-        key = args[i]
-        if key == 'efield':
-            if out['efield'] is not None:
-                raise ValueError('e3gnn: give one field keyword')
-            out['efield'] = [float(x) for x in args[i + 1 : i + 4]]
-            if len(out['efield']) != 3:
-                raise ValueError('e3gnn: efield requires 3 values')
-            i += 4
-        elif key == 'modal':
-            if i + 1 == len(args):
-                raise ValueError('e3gnn: modal requires a name')
-            out['modal'] = args[i + 1]
-            i += 2
-        elif key == 'enforce_asr':
-            i += 1
-            if i < len(args) and args[i] in ('yes', 'no'):
-                out['enforce_asr'] = args[i] == 'yes'
-                i += 1
-        elif key == 'efield_virial':
-            raise ValueError(
-                'e3gnn: efield_virial is not supported: direct models derive from '
-                'no field energy and have no field stress'
-            )
+    while i < len(args) and args[i] in KEYWORDS:
+        i = KEYWORDS[args[i]](args, i, out)
     out['symbols'] = args[i:]
     bad = [s for s in out['symbols'] if s not in atomic_numbers]
     if bad:
         raise ValueError(
-            f'e3gnn: {bad[0]} is neither a keyword (modal, efield, enforce_asr) nor '
-            f'an element symbol'
+            f'e3gnn: {bad[0]} is neither a keyword ({", ".join(KEYWORDS)}) nor an '
+            f'element symbol'
         )
     return out
 
@@ -103,26 +141,15 @@ class PairDriver:
         unknown = [s for s in opt['symbols'] if atomic_numbers.get(s) not in known]
         if unknown:
             raise ValueError(f'e3gnn: elements unknown to this model: {unknown}')
-        self.calc = self.base
-        field = 'none'
-        if opt['efield'] is not None:
-            self.calc = FieldCalculator(self.base, enforce_asr=opt['enforce_asr'])
-            self.calc.set_efield(opt['efield'])
-            field = (
-                str(opt['efield'])
-                + ' (reported energy excludes the field term, so forces are not its '
-                'gradient)'
-            )
+        self.calc, note = WRAP(self.base, opt)
         self.numbers = np.array([0] + [atomic_numbers[s] for s in opt['symbols']])
         self.cutoff = float(self.base.cutoff)
-        run = (
-            self.base.mps_runtime.report
-            if self.base.mps_runtime
-            else 'reference code'
-        )
+        from sevenn.mps import report
+
+        run = report(self.base.model) or 'reference code'
         self.banner = (
-            f'e3gnn on the Apple GPU: {path}, cutoff {self.cutoff} A, '
-            f'field {field}, elements {" ".join(opt["symbols"])}\n{run}'
+            f'e3gnn on the Apple GPU: {path}, cutoff {self.cutoff} A{note}, '
+            f'elements {" ".join(opt["symbols"])}\n{run}'
         )
 
     def compute(self, nlocal: int, x, f, types, eatom, virial, box) -> float:
