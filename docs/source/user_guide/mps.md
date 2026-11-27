@@ -24,22 +24,23 @@ sevenn train input.yaml        # with device: mps under train
 ```
 
 `Trainer`, `sevenn.scripts.inference.inference` and user scripts behave the same way: the
-switch happens in `model.to('mps')`, and `model.to('cpu')` undoes it. A model instance given to
-the calculator is changed in place.
+switch happens in `model.to('mps')`, and `model.to('cpu')` undoes it; parameters converted to
+float32 stay float32. A model instance given to the calculator is changed in place.
 
 ## Selection and opt-out
 
 | Request | Result |
 |---|---|
 | `device='cpu'` | CPU; the Apple GPU code is not imported |
-| `device='mps'` | Apple GPU, fused kernels where supported, edge padding |
+| `device='mps'` | Apple GPU, fused kernels where supported; edge padding when every convolution is fused |
 | `device='mps'` and `SEVENN_DISABLE_MPS=1` | Apple GPU, reference e3nn code, no padding |
-| `device='auto'`, no CUDA | Apple GPU (CPU with `SEVENN_DISABLE_MPS=1`) |
+| `device='auto'`, no CUDA | Apple GPU if this PyTorch can run on it (2.6 or later), else CPU; CPU with `SEVENN_DISABLE_MPS=1`, and for a deployed TorchScript model |
 | `device='auto'`, CUDA available | CUDA |
 | model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP, moved to `mps` | error |
 
 `SEVENN_DISABLE_MPS` accepts `1`, `true` or `yes`. Modules the kernels do not cover keep the
-e3nn code on the GPU with a warning; nothing moves to the CPU.
+e3nn code on the GPU with a warning; nothing moves to the CPU, unless `PYTORCH_ENABLE_MPS_FALLBACK=1`
+is set, which lets PyTorch run operations on the CPU silently (SevenNet warns about it).
 
 ## LAMMPS
 
@@ -61,13 +62,15 @@ cmake ../cmake -DBUILD_MPI=no -DBUILD_OMP=no && make -j 8
 Plugin for `pip install lammps`, from an installed SevenNet:
 
 ```bash
-SRC=$(python -c "import sevenn.mps.lammps.patch as p; print(p.SRC)")
-bash $SRC/build_plugin.sh python
-export LAMMPS_PLUGIN_PATH=$SRC
+SRC="$(python -c "import sevenn.mps.lammps.patch as p; print(p.SRC)")"
+bash "$SRC/build_plugin.sh" python
+export LAMMPS_PLUGIN_PATH="$SRC"
 ```
 
-The pair style refuses what it cannot honour: several ranks, `neigh_modify include`,
-`pair_style hybrid`, deployed `.pt` files.
+The plugin is built next to its sources, so the installed package must be writable. The pair
+style refuses what it cannot honour: several MPI ranks, units other than `metal`,
+`neigh_modify exclude` and `include`, `pair_style hybrid` and `hybrid/overlay`, deployed `.pt`
+files; per-atom stress is not available.
 
 ## Performance
 
@@ -88,8 +91,8 @@ averaged over two runs on the GPU (one on the CPU); MacBook Pro M5 Pro (48 GB), 
 
 ## Limits
 
-- Eval mode: linear and self-connection layers give first derivatives only and treat their
-  weights as constants (forces, stress and training are complete; for other parameter
+- Eval mode: linear, self-connection and gate layers give first derivatives only, and linear and
+  self-connection layers treat their weights as constants (forces, stress and training are complete; for other parameter
   gradients use train mode or the CPU).
 - 32-bit indices: a graph above about 2^31 elements per kernel buffer is refused.
 - Autocast keeps the reference code.

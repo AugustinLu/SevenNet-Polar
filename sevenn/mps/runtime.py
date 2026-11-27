@@ -20,7 +20,11 @@ from typing import Dict, Optional
 import torch
 from e3nn.o3 import TensorProduct
 
-from sevenn.nn.convolution import IrrepsConvolution
+import sevenn._keys as KEY
+from sevenn.nn.convolution import (
+    IrrepsConvolution,
+    IrrepsScatterGatterFusedConvolution,
+)
 
 from . import _policy
 from .modules import check_torch, disable, enable
@@ -40,24 +44,55 @@ class MpsState:
         self.bucket = bucket  # 0: no padding
         self.cutoff = cutoff
         self.n_real: Optional[int] = None  # edges of the call in progress
+        self.padded_idx = None  # its padded edge_index, to undo after a failed call
 
 
 def _device_type_after(model, fn) -> Optional[str]:
+    # float32 on the model's device: a float64 probe cannot go to the Apple GPU
     p = next(model.parameters(), None)
-    probe = torch.zeros(0) if p is None else p.new_zeros(0)
+    device = 'cpu' if p is None else p.device
     try:
-        return fn(probe).device.type
+        return fn(torch.zeros(0, dtype=torch.float32, device=device)).device.type
     except Exception:
         return None
+
+
+def _cuda_only(model) -> None:
+    """Refuse tensor products that only CUDA can run (cuEquivariance, FlashTP,
+    OpenEquivariance, LunaTP), before anything is moved or changed."""
+    names = sorted(
+        {
+            type(m.convolution).__name__
+            for m in model.modules()
+            if isinstance(m, IrrepsConvolution)
+            and not isinstance(m.convolution, TensorProduct)
+            and not m.is_parallel
+        }
+        | {
+            type(m).__name__
+            for m in model.modules()
+            if isinstance(m, IrrepsScatterGatterFusedConvolution)
+        }
+    )
+    if names:
+        raise ValueError(
+            f'the Apple GPU runs the e3nn tensor product, and this model has '
+            f'{", ".join(names)}: build it without enable_cueq, enable_flash, '
+            f'enable_oeq or enable_lunatp'
+        )
 
 
 def apply(model, fn, parent_apply, *args, **kwargs):
     """Module._apply of AtomGraphSequential for a move to or from the Apple GPU:
     parent_apply is nn.Module._apply bound to the model."""
     if _device_type_after(model, fn) != 'mps':
-        restore(model)  # leaving the Apple GPU, or a conversion off it
-        return parent_apply(fn, *args, **kwargs)
+        # leaving the Apple GPU, or a conversion that cannot stay on it: undone
+        # only once the conversion has succeeded
+        out = parent_apply(fn, *args, **kwargs)
+        restore(model)
+        return out
     check_torch('SevenNet')
+    _cuda_only(model)
     restore(model)
     to_float32(model)
     out = parent_apply(fn, *args, **kwargs)
@@ -83,27 +118,21 @@ def prepare(model, bucket: int = BUCKET) -> Dict[str, int]:
     """Fused kernels and edge padding for a model on the Apple GPU; starts from
     scratch on every call. Returns the report (empty with the reference code)."""
     restore(model)
+    try:
+        return _prepare(model, bucket)
+    except BaseException:
+        restore(model)  # no half-prepared model
+        raise
+
+
+def _prepare(model, bucket: int) -> Dict[str, int]:
     if os.environ.get('PYTORCH_ENABLE_MPS_FALLBACK') == '1':
         warnings.warn(
             'PYTORCH_ENABLE_MPS_FALLBACK=1 lets PyTorch run unsupported operations '
             'on the CPU without telling you; SevenNet does not need it on the Apple '
             'GPU'
         )
-    cuda_only = sorted(
-        {
-            type(m.convolution).__name__
-            for m in model.modules()
-            if isinstance(m, IrrepsConvolution)
-            and not isinstance(m.convolution, TensorProduct)
-            and not m.is_parallel
-        }
-    )
-    if cuda_only:
-        raise ValueError(
-            f'the Apple GPU runs the e3nn tensor product, and this model has '
-            f'{", ".join(cuda_only)}: build it without enable_cueq, enable_flash, '
-            f'enable_oeq or enable_lunatp'
-        )
+    _cuda_only(model)
     cutoff = float(getattr(model, 'cutoff', 0.0) or 0.0)
     if _policy.disabled():
         model.__dict__['_mps'] = MpsState({}, None, 0, cutoff)
@@ -171,19 +200,27 @@ def report(model) -> Dict[str, int]:
 
 def _pad_hook(model, args):
     st = model.__dict__['_mps']
-    st.n_real = None
     st.plan.expect_padded = None
     data = args[0]
+    if (
+        st.n_real is not None
+        and st.padded_idx is not None
+        and data[KEY.EDGE_IDX] is st.padded_idx
+    ):
+        unpad(data, st.n_real)  # the same graph again after a failed call
+    st.n_real, st.padded_idx = None, None
     # under autocast the convolutions fall back to e3nn, which would visit pad edges
     if not torch.is_autocast_enabled('mps'):
         st.n_real = pad(data, st.cutoff, st.bucket, st.plan)
+        if st.n_real is not None:
+            st.padded_idx = data[KEY.EDGE_IDX]
     return None
 
 
 def _unpad_hook(model, args, out):
     st = model.__dict__['_mps']
     st.plan.expect_padded = None
-    n_real, st.n_real = st.n_real, None
+    n_real, st.n_real, st.padded_idx = st.n_real, None, None
     if n_real is not None:
         unpad(out, n_real)
     return None

@@ -38,7 +38,7 @@ class _ModalInputPrepare(nn.Module):
 
 def _moves_to_mps(fn) -> bool:
     try:
-        return fn(torch.zeros(0)).device.type == 'mps'
+        return fn(torch.zeros(0, dtype=torch.float32)).device.type == 'mps'
     except Exception:
         return False
 
@@ -106,7 +106,8 @@ class AtomGraphSequential(nn.Sequential):
     def _apply(self, fn, *args, **kwargs):
         # Apple GPU: float32 before the move, fused kernels after it, undone when the
         # model leaves the device (sevenn/mps)
-        if '_mps' in self.__dict__ or _moves_to_mps(fn):
+        mps_state = '_mps' in self.__dict__ or '_mps_plan' in self.__dict__
+        if mps_state or _moves_to_mps(fn):
             from sevenn.mps.runtime import apply
 
             return apply(self, fn, super()._apply, *args, **kwargs)

@@ -23,8 +23,3 @@ if os.environ.get('TORCH_ALLOW_TF32_CUBLAS_OVERRIDE') == '1':
         'TORCH_ALLOW_TF32_CUBLAS_OVERRIDE is enabled. '
         'This may alter numerical behavior of sevennet.'
     )
-
-# SevenNet-Polar 0.3 opt-out of the Apple GPU kernels, kept as an alias
-if os.environ.get('SEVENNET_MPS_OPT') == 'off':
-    warn('SEVENNET_MPS_OPT=off is deprecated, use SEVENN_DISABLE_MPS=1')
-    os.environ.setdefault('SEVENN_DISABLE_MPS', '1')

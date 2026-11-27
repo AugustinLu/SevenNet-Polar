@@ -27,8 +27,7 @@ lists; moving it away (`model.to('cpu')`) undoes it. The model object is changed
 | `sevenn inference --device mps ...` | evaluates a dataset with the fused kernels; batches padded to 256 edges |
 | `device: mps` under `train` in the YAML, `Trainer(..., device='mps')` | training on the fused kernels |
 
-From 0.3 (deprecated, still accepted): `mps_opt='off'` and `mps_edge_bucket` of `SevenNetCalculator`,
-`SEVENNET_MPS_OPT=off`, `--enable_mps` of `sevenn train` and `sevenn inference`.
+The 0.3 options (`mps_opt`, `mps_edge_bucket`, `SEVENNET_MPS_OPT`, `--enable_mps`) are gone in 0.3.3.
 
 A model built with cuEquivariance, FlashTP, OpenEquivariance or LunaTP cannot move to the Apple GPU (error). A PyTorch
 without `torch.mps.compile_shader` (2.6), or weights other than float32, run the reference code on the GPU with a

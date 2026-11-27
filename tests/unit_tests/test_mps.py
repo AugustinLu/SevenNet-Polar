@@ -29,8 +29,12 @@ from sevenn.mps.padding import pad, padding_is_safe, unpad
 from sevenn.util import chemical_species_preprocess
 
 needs_mps = pytest.mark.skipif(
-    not (torch.backends.mps.is_available() and mps_torch_supported()),
-    reason='needs an Apple GPU and PyTorch 2.6 or later',
+    not (
+        torch.backends.mps.is_available()
+        and mps_torch_supported()
+        and hasattr(torch.mps, 'compile_shader')
+    ),
+    reason='needs an Apple GPU and PyTorch 2.7 or later (fused kernels)',
 )
 METHODS = ['direct']
 KEYS = (
@@ -218,22 +222,6 @@ def test_cuda_and_cpu_paths_do_not_import_the_apple_code():
         "assert not [m for m in sys.modules if m.startswith('sevenn.mps')]\n"
     )
     subprocess.run([sys.executable, '-c', code], check=True)
-
-
-def test_polar_03_fused_option_on_cpu_device_is_an_error():
-    model = _build(_config())
-    with pytest.warns(DeprecationWarning, match='mps_opt'):
-        with pytest.raises(ValueError, match='needs device'):
-            SevenNetCalculator(
-                model, file_type='model_instance', device='cpu', mps_opt='fused'
-            )
-    with pytest.warns(DeprecationWarning, match='mps_opt'):
-        with pytest.raises(ValueError, match="must be 'fused' or 'off'"):
-            SevenNetCalculator(
-                model, file_type='model_instance', device='cpu', mps_opt='yes'
-            )
-    calc = SevenNetCalculator(model, file_type='model_instance', device='cpu')
-    assert '_mps' not in calc.model.__dict__
 
 
 # ---- Apple GPU ----
@@ -878,22 +866,6 @@ def test_instance_under_default_file_type():
 
 
 @needs_mps
-def test_polar_03_mps_opt_still_works():
-    model = _build(_config())
-    with pytest.warns(DeprecationWarning, match='mps_opt'):
-        calc = SevenNetCalculator(
-            model, file_type='model_instance', device='mps', mps_opt='off'
-        )
-    assert not _fused(calc.model) and mps.report(calc.model) == {}
-    with pytest.warns(DeprecationWarning, match='mps_opt'):
-        calc = SevenNetCalculator(
-            model, file_type='model_instance', device='mps', mps_edge_bucket=64
-        )
-    assert mps.report(calc.model)['conv_fused'] == 3
-    assert calc.model._mps.bucket == 64
-
-
-@needs_mps
 def test_deepcopy_after_load_state_dict_uses_the_new_weights():
     import copy
 
@@ -1214,15 +1186,6 @@ def test_self_connection_uses_e3nn_when_types_carry_gradients():
     assert y.grad is not None and float(y.grad.abs().max()) > 0
 
 
-def test_polar_03_module_names_still_import():
-    # LAMMPS binaries built with SevenNet-Polar 0.3 import sevenn.lammps_pair
-    from sevenn.lammps_external import run_input
-    from sevenn.lammps_pair import PairDriver
-    from sevenn.mps.lammps import external, pair
-
-    assert PairDriver is pair.PairDriver and run_input is external.run_input
-
-
 # ---- edge cases ----
 
 
@@ -1405,7 +1368,7 @@ def test_type_index_must_be_int32():
 
 
 @needs_mps
-@pytest.mark.parametrize('opt', ['fused', 'off', 'flag'])
+@pytest.mark.parametrize('opt', ['fused', 'off'])
 def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
     from unittest import mock
 
@@ -1422,15 +1385,11 @@ def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
         mps_runtime, 'enable', lambda m: reports.append(enable(m)) or reports[-1]
     )
     out = tmp_path / 'inference_results'
-    device = ['--enable_mps'] if opt == 'flag' else ['--device', 'mps']
+    device = ['--device', 'mps']
     argv = ['sevenn_inference', '--output', str(out), '--batch', '2', *device,
             '7net-0', str(data / 'systems' / 'hfo2.extxyz')]
     with mock.patch('sys.argv', argv):
-        if opt == 'flag':  # SevenNet-Polar 0.3
-            with pytest.warns(DeprecationWarning, match='--device mps'):
-                inference_main()
-        else:
-            inference_main()
+        inference_main()
 
     def errors(path):
         lines = (path / 'errors.txt').read_text().splitlines()
@@ -1445,18 +1404,29 @@ def test_sevenn_inference_on_the_apple_gpu(opt, tmp_path, monkeypatch):
         assert not reports
 
 
-def test_cuda_only_tensor_products_are_refused_on_the_apple_gpu():
+@needs_mps
+@pytest.mark.parametrize('kind', ['convolution', 'scatter_gather'])
+def test_cuda_only_tensor_products_are_refused_on_the_apple_gpu(kind):
+    from sevenn.nn.convolution import IrrepsScatterGatterFusedConvolution
+
     model = _build(_config())
-    conv = next(m for m in model.modules() if hasattr(m, 'convolution'))
-    conv.convolution = torch.nn.Identity()  # stands for cuEquivariance, FlashTP...
-    if not (torch.backends.mps.is_available() and mps_torch_supported()):
-        return
-    with pytest.raises(ValueError, match='Identity: build it without enable_cueq'):
+    name = next(n for n, m in model._modules.items() if hasattr(m, 'convolution'))
+    if kind == 'convolution':  # stands for a patched cuEquivariance convolution
+        model._modules[name].convolution = torch.nn.Identity()
+    else:  # FlashTP, OpenEquivariance, LunaTP, fused cuEquivariance
+        fused = IrrepsScatterGatterFusedConvolution.__new__(
+            IrrepsScatterGatterFusedConvolution
+        )
+        torch.nn.Module.__init__(fused)
+        model._modules[name] = fused
+    with pytest.raises(ValueError, match='build it without enable_cueq'):
         model.to('mps')
+    # refused before anything moved
+    assert all(p.device.type == 'cpu' for p in model.parameters())
 
 
 @needs_mps
-def test_sevenn_train_with_enable_mps(tmp_path, monkeypatch):
+def test_sevenn_train_on_the_apple_gpu(tmp_path, monkeypatch):
     from unittest import mock
 
     import yaml
@@ -1474,16 +1444,16 @@ def test_sevenn_train_with_enable_mps(tmp_path, monkeypatch):
     data = str(root / 'tests' / 'data' / 'systems' / 'hfo2.extxyz')
     cfg = yaml.safe_load(open(root / 'sevenn' / 'presets' / 'base.yaml'))
     cfg['train']['epoch'] = 1
+    cfg['train']['device'] = 'mps'
     cfg['data']['load_trainset_path'] = data
     cfg['data'].pop('load_testset_path', None)
     cfg['data']['load_validset_path'] = data
     yml = tmp_path / 'input.yaml'
     yml.write_text(yaml.dump(cfg))
     Logger().switch_file(str(tmp_path / 'log.sevenn'))
-    argv = ['sevenn', 'train', '-w', str(tmp_path), '--enable_mps', str(yml)]
+    argv = ['sevenn', 'train', '-w', str(tmp_path), str(yml)]
     with mock.patch('sys.argv', argv):
-        with pytest.warns(DeprecationWarning, match='device: mps'):
-            sevenn_main()
+        sevenn_main()
     assert len(reports) == 1 and reports[0]['conv_fused'] > 0
     ckpt = torch.load(tmp_path / 'checkpoint_best.pth', weights_only=False)
     assert ckpt['config']['device'] == 'mps'
@@ -1765,3 +1735,57 @@ def test_cpu_fallback_of_pytorch_is_warned_about(monkeypatch):
     monkeypatch.setenv('PYTORCH_ENABLE_MPS_FALLBACK', '1')
     with pytest.warns(UserWarning, match='PYTORCH_ENABLE_MPS_FALLBACK'):
         _build(_config()).to('mps')
+
+
+# ---- lifecycle edge cases (found in review)
+
+
+@needs_mps
+def test_a_float64_model_moves_in_float32():
+    model = _build(_config()).double()
+    model.to('mps')
+    assert all(p.dtype == torch.float32 for p in model.parameters())
+    assert _fused(model)
+
+
+@needs_mps
+def test_move_inside_no_grad_prepares_the_model():
+    model = _build(_config())
+    with torch.no_grad():
+        model.to('mps')
+    assert _fused(model) and model._mps.bucket == 256
+
+
+@needs_mps
+def test_a_failed_conversion_leaves_the_model_prepared():
+    model = _build(_config()).to('mps')
+    with pytest.raises(Exception):
+        model.double()  # MPS has no float64
+    assert _fused(model) and model._forward_pre_hooks and '_mps' in model.__dict__
+
+
+@needs_mps
+def test_the_same_graph_after_a_failed_call_is_not_padded_twice():
+    model = _build(_config()).to('mps')
+    model.set_is_batch_data(False)
+    model.eval()
+    ref = _e3nn_on_gpu(_build(_config()))
+    ref.set_is_batch_data(False)
+    ref.eval()
+    graph = _graph().to('mps')
+    n = int(graph[KEY.EDGE_IDX].shape[1])
+    want = _run(ref, graph)
+    good = model.forward
+
+    def boom(data):
+        raise RuntimeError('boom')
+
+    model.forward = boom
+    with pytest.raises(RuntimeError, match='boom'):
+        model(graph)
+    assert int(graph[KEY.EDGE_IDX].shape[1]) > n  # left padded by the failure
+    model.forward = good
+    out = model(graph)
+    assert int(out[KEY.EDGE_IDX].shape[1]) == n
+    assert model._mps_plan.num_real == n
+    _close(want, {k: out[k].detach().cpu() for k in KEYS if k in out})

@@ -2,7 +2,6 @@ import argparse
 import os
 import sys
 import time
-import warnings
 
 from sevenn import __version__
 
@@ -49,12 +48,6 @@ def run(args):
     use_cue = args.enable_cueq
     use_flash = args.enable_flash
     use_oeq = args.enable_oeq
-    use_mps = args.enable_mps  # SevenNet-Polar 0.3; device: mps does the same
-    if use_mps:
-        warnings.warn(
-            '--enable_mps is deprecated: set device: mps in the input',
-            DeprecationWarning,
-        )
 
     if use_cue:
         import sevenn.nn.cue_helper
@@ -135,9 +128,6 @@ def run(args):
         if use_oeq:
             model_config[KEY.USE_OEQ] = True
 
-        if use_mps:
-            train_config[KEY.DEVICE] = 'mps'
-
         logger.print_config(model_config, data_config, train_config)
         # don't have to distinguish configs inside program
         global_config.update(model_config)
@@ -189,12 +179,6 @@ def cmd_parser_train(parser):
         '-oeq',
         '--enable_oeq',
         help='use OpenEquivariance accelerations for training',
-        action='store_true',
-    )
-    ag.add_argument(
-        '-mps',
-        '--enable_mps',
-        help=argparse.SUPPRESS,
         action='store_true',
     )
     ag.add_argument(

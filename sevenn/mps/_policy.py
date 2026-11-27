@@ -24,9 +24,10 @@ def torch_supported() -> bool:
     global _TORCH_OK
     if _TORCH_OK is None:
         try:
-            x = torch.zeros(2, device='mps')
+            x = torch.zeros(2, dtype=torch.float32, device='mps')
             idx = torch.zeros(1, dtype=torch.long, device='mps')
-            x.scatter_reduce_(0, idx, torch.ones(1, device='mps'), reduce='sum')
+            one = torch.ones(1, dtype=torch.float32, device='mps')
+            x.scatter_reduce_(0, idx, one, reduce='sum')
             _TORCH_OK = True
         except (NotImplementedError, RuntimeError):
             _TORCH_OK = False

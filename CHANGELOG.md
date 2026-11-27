@@ -16,12 +16,14 @@ documentation of field MD and of the Apple GPU limits. The optimizations planned
   instance given to the calculator on `device='mps'` is now changed in place (before, a copy was).
 - **`device='auto'` selects the Apple GPU** on a Mac without CUDA (before: the CPU).
 - **Opt-out: `SEVENN_DISABLE_MPS=1`** (also `true`, `yes`) keeps the reference e3nn code on the
-  Apple GPU, and makes `device='auto'` select the CPU. Deprecated but still accepted:
-  `SEVENNET_MPS_OPT=off`, `mps_opt` and `mps_edge_bucket` of `SevenNetCalculator`, `--enable_mps`
-  of `sevenn train` and `sevenn inference`, and the module names `sevenn.lammps_pair` (which
-  LAMMPS binaries built with 0.3 import) and `sevenn.lammps_external`.
-- **`sevenn patch_lammps` detects the Apple GPU**: on a Mac with an Apple GPU and no CUDA it
-  installs the Apple GPU pair style (`--enable_mps` no longer needed). The plugin sources moved
+  Apple GPU, and makes `device='auto'` select the CPU.
+- **Removed:** `SEVENNET_MPS_OPT`, `mps_opt` and `mps_edge_bucket` of `SevenNetCalculator`,
+  `--enable_mps` of `sevenn train`, `sevenn inference` and `sevenn patch_lammps`, and the modules
+  `sevenn.lammps_pair` and `sevenn.lammps_external` (now `sevenn.mps.lammps.pair` and
+  `.external`). Use the device and `SEVENN_DISABLE_MPS` instead. A LAMMPS built with 0.3 must be
+  patched and built again.
+- **`sevenn patch_lammps` detects the Apple GPU**: on a Mac with an Apple GPU that this PyTorch can
+  run on, and no CUDA, it installs the Apple GPU pair style. The plugin sources moved
   to `sevenn/mps/lammps/src/`.
 - **Safeguards from the upstream pull request (MDIL-SNU/SevenNet#340):** 32-bit index checks in
   the linear and gate kernels; no kernel launch on an empty graph; a convolution whose generated

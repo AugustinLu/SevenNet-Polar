@@ -111,18 +111,23 @@ def test_pair_style_equals_the_calculator(tmp_path):
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     at.rattle(0.05, seed=2)
     lmp = _pair_lammps(tmp_path, at, '7net-0 Na Cl')
-    lmp.command('thermo_style custom step pe press pxx pyy pzz pxy pxz pyz')
     lmp.command('compute pea all pe/atom')
+    lmp.command('compute pesum all reduce sum c_pea')  # tallies per-atom energies
+    lmp.command(
+        'thermo_style custom step pe c_pesum press pxx pyy pzz pxy pxz pyz'
+    )
     lmp.command('run 0')
     pe, press = lmp.get_thermo('pe'), lmp.get_thermo('pxx')
     ids = lmp.numpy.extract_atom('id')[: len(at)].copy()
     fl = lmp.numpy.extract_atom('f')[: len(at)].copy()
+    eatom = lmp.numpy.extract_compute('pea', 1, 1)[: len(at)].copy()
     lmp.close()
     calc = SevenNetCalculator('7net-0', device='mps')
     at.calc = calc
     assert abs(pe - at.get_potential_energy()) < 1e-3
     assert np.abs(fl[np.argsort(ids)] - at.get_forces()).max() < 2e-4
     assert abs(press - (-at.get_stress()[0] * 1602176.634)) < 2.0
+    assert np.abs(eatom[np.argsort(ids)] - calc.results['energies']).max() < 1e-4
 
 
 @needs_mps
@@ -331,42 +336,55 @@ def test_run_input_joins_continued_lines(tmp_path):
     assert 'print "Step #1"' in lmp.seen
 
 
-@pytest.mark.parametrize('extra', [[], ['--enable_mps']])
-def test_patch_lammps_reports_failure(extra):
+def _apple_route() -> bool:
+    try:
+        from sevenn.mps.lammps.patch import detected
+
+        return detected(False)
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _apple_route(), reason='the Apple GPU route of patch_lammps')
+def test_patch_lammps_reports_failure():
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).parents[2]))
     env.pop('SEVENN_DISABLE_MPS', None)
     p = subprocess.run(
-        [sys.executable, '-m', 'sevenn.main.sevenn_patch_lammps', '/no/such/folder']
-        + extra,
+        [sys.executable, '-m', 'sevenn.main.sevenn_patch_lammps', '/no/such/folder'],
         capture_output=True,
         text=True,
         env=env,
     )
     assert p.returncode != 0
-    if torch.backends.mps.is_available() and not torch.cuda.is_available():
-        assert 'Apple GPU pair style' in p.stdout  # detected on a Mac
+    assert 'Apple GPU pair style' in p.stdout
 
 
 def test_patch_lammps_on_a_mac_picks_the_apple_gpu_unless_disabled(monkeypatch):
-    from argparse import Namespace
+    from sevenn.mps import _policy
+    from sevenn.mps.lammps.patch import detected
 
-    from sevenn.main.sevenn_patch_lammps import _apple_gpu
-
-    args = Namespace(d3=False, enable_flash=False, enable_oeq=False)
     monkeypatch.setattr(sys, 'platform', 'darwin')
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
     monkeypatch.setattr(torch.backends.mps, 'is_available', lambda: True)
+    monkeypatch.setattr(_policy, '_TORCH_OK', True)
     monkeypatch.delenv('SEVENN_DISABLE_MPS', raising=False)
-    assert _apple_gpu(args)
-    assert not _apple_gpu(Namespace(d3=True, enable_flash=False, enable_oeq=False))
+    assert detected(False)
+    assert not detected(True)  # --d3, --enable_flash or --enable_oeq
+    monkeypatch.setattr(_policy, '_TORCH_OK', False)  # a PyTorch before 2.6
+    assert not detected(False)
+    monkeypatch.setattr(_policy, '_TORCH_OK', True)
     monkeypatch.setenv('SEVENN_DISABLE_MPS', '1')
-    assert not _apple_gpu(args)
+    assert not detected(False)
     monkeypatch.delenv('SEVENN_DISABLE_MPS')
     monkeypatch.setattr(sys, 'platform', 'linux')
-    assert not _apple_gpu(args)
+    assert not detected(False)
 
 
-def test_external_bridge_stops_when_the_calculator_fails(tmp_path):
+@pytest.mark.parametrize(
+    'mode, message',
+    [('raise', 'model failed'), ('bad_shape', 'forces of shape')],
+)
+def test_external_bridge_stops_when_the_calculator_fails(tmp_path, mode, message):
     lammps = pytest.importorskip('lammps')
     from ase.calculators.calculator import Calculator, all_changes
     from ase.io import write
@@ -380,11 +398,12 @@ def test_external_bridge_stops_when_the_calculator_fails(tmp_path):
         def calculate(self, atoms=None, properties=None, system_changes=all_changes):
             super().calculate(atoms, properties, system_changes)
             Failing.calls += 1
+            forces = np.zeros((len(atoms), 3))
             if Failing.calls == 3:
-                raise RuntimeError('model failed')
-            self.results = dict(
-                energy=0.0, forces=np.zeros((len(atoms), 3)), stress=np.zeros(6)
-            )
+                if mode == 'raise':
+                    raise RuntimeError('model failed')
+                forces = np.zeros((len(atoms), 2))  # fails when published
+            self.results = dict(energy=0.0, forces=forces, stress=np.zeros(6))
 
     at = bulk('NaCl', 'rocksalt', a=5.63, cubic=True)
     write(
@@ -411,7 +430,7 @@ run 20
 print "not reached"
 """)
     lmp = lammps.lammps(cmdargs=['-screen', 'none', '-log', 'none'])
-    with pytest.raises(RuntimeError, match='model failed'):
+    with pytest.raises(RuntimeError, match=message):
         run_input(lmp, str(inp), Failing(), ['Na', 'Cl'])
     assert lmp.extract_global('ntimestep') < 5 and Failing.calls == 3
     lmp.close()

@@ -41,8 +41,6 @@ class SevenNetCalculator(Calculator):
         enable_flash: Optional[bool] = False,
         enable_oeq: Optional[bool] = False,
         sevennet_config: Optional[Dict] = None,  # Not used in logic, just meta info
-        mps_opt: Optional[str] = None,
-        mps_edge_bucket: int = 256,
         **kwargs,
     ) -> None:
         """Initialize SevenNetCalculator.
@@ -71,13 +69,6 @@ class SevenNetCalculator(Calculator):
             if True, use OpenEquivariance to accelerate inference.
         sevennet_config: dict | None, default=None
             Not used, but can be used to carry meta information of this calculator
-        mps_opt: str | None, default=None
-            Deprecated (SevenNet-Polar 0.3): device='mps' runs the fused kernels,
-            and SEVENN_DISABLE_MPS=1 the reference e3nn code. 'off' still selects
-            the reference code for this calculator's model.
-        mps_edge_bucket: int, default=256
-            Deprecated (SevenNet-Polar 0.3): edge padding on the Apple GPU, a
-            multiple of this; 0 or 1 disables it.
         """
         super().__init__(**kwargs)
         self.sevennet_config = None
@@ -188,10 +179,6 @@ class SevenNetCalculator(Calculator):
 
         self.model.to(self.device)
         self.model.eval()
-        if mps_opt is not None or mps_edge_bucket != 256:
-            _polar_03_apple_options(
-                self.model, self.device, mps_opt, mps_edge_bucket
-            )
         self.implemented_properties = [
             'free_energy',
             'energy',
@@ -296,35 +283,6 @@ class SevenNetCalculator(Calculator):
             del data['data_info']
 
         self.results = self.output_to_results(self.model(data))
-
-
-def _polar_03_apple_options(model, device, mps_opt, bucket) -> None:
-    """mps_opt and mps_edge_bucket of SevenNet-Polar 0.3, kept for old scripts."""
-    warnings.warn(
-        "mps_opt and mps_edge_bucket are deprecated: device='mps' runs the fused "
-        'kernels, SEVENN_DISABLE_MPS=1 the reference e3nn code',
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    if mps_opt not in (None, 'fused', 'off'):
-        raise ValueError(f"mps_opt must be 'fused' or 'off', got {mps_opt!r}")
-    if torch.device(device).type != 'mps':
-        if mps_opt == 'fused':
-            raise ValueError(f"mps_opt='fused' needs device='mps', got {device}")
-        return
-    if not isinstance(model, AtomGraphSequential):
-        if mps_opt == 'fused':
-            raise ValueError(
-                "mps_opt='fused' is not possible: a deployed TorchScript model "
-                'has no modules to switch'
-            )
-        return
-    from sevenn import mps
-
-    if mps_opt == 'off':
-        mps.restore(model)
-    else:
-        mps.prepare(model, bucket=bucket)
 
 
 class FieldCalculator(Calculator):

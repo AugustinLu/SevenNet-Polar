@@ -90,6 +90,12 @@ def padding_is_safe(model, cutoff: float, all_fused: bool = False) -> bool:
     derivatives must also stay below 1e-5.
 
     """
+    # derivatives are part of the check: also when the model moves inside no_grad
+    with torch.enable_grad():
+        return _padding_is_safe(model, cutoff, all_fused)
+
+
+def _padding_is_safe(model, cutoff: float, all_fused: bool) -> bool:
     device = next(model.parameters()).device
     vec = torch.tensor(
         [[cutoff, 0.0, 0.0]], dtype=torch.float32, device=device, requires_grad=True

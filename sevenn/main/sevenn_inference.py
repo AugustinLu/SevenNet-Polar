@@ -2,7 +2,6 @@ import argparse
 import glob
 import os
 import sys
-import warnings
 
 description = (
     'evaluate sevenn_data/ase readable with a model (checkpoint).'
@@ -87,12 +86,6 @@ def add_args(parser):
         action='store_true',
     )
     ag.add_argument(
-        '-mps',
-        '--enable_mps',
-        help=argparse.SUPPRESS,
-        action='store_true',
-    )
-    ag.add_argument(
         '--enforce_asr',
         action='store_true',
         help=(
@@ -118,11 +111,6 @@ def run(args):
         raise FileExistsError(f'Directory {out} already exists')
 
     device = args.device
-    if args.enable_mps:  # SevenNet-Polar 0.3; --device mps does the same
-        warnings.warn(
-            '--enable_mps is deprecated: use --device mps', DeprecationWarning
-        )
-        device = 'mps'
     if device == 'auto':
         from sevenn.util import auto_device
 
